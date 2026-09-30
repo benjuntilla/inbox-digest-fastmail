@@ -28,6 +28,9 @@ const pendingPickByChat = new Map<string, PendingPick>();
 // The agent each chat was running on when its choice was made: a chat that has moved off it has
 // spent the choice, wherever it landed.
 const armedAgentIdByChat = new Map<string, string>();
+// Chats whose switch-and-send request is out: the choice is being carried out, and the chat
+// carries no handoff to say so until the request has written one.
+const sendingSwitchChatIds = new Set<string>();
 
 /** Choose the account the chat's next send switches it to, or clear the choice with null. A pick
  *  made for an earlier choice does not survive: it named a model of that account's harness. */
@@ -86,6 +89,36 @@ export function pendingSwitchTarget(chatId: string): ProviderAccount | null {
   const chat = getChatById(chatId);
   if (account === null || chat === undefined || !isSwitchTarget(chat, account)) return null;
   return account;
+}
+
+/** Mark the chat's switch-and-send request as out, or back. */
+export function setSwitchSending(chatId: string, isSending: boolean): void {
+  if (isSending) sendingSwitchChatIds.add(chatId);
+  else sendingSwitchChatIds.delete(chatId);
+}
+
+export function isSwitchSending(chatId: string): boolean {
+  return sendingSwitchChatIds.has(chatId);
+}
+
+/**
+ * The account the chat's next send switches it to, or null when the next send is an ordinary one.
+ * The one reading behind everything that says "next": the composer's strip and its "Switch and
+ * send" button, and the model bar's "next" mark. A choice being sent or carried out is not next
+ * any more, and a failed switch leaves the next send an ordinary one: its notice governs.
+ */
+export function nextSendSwitchTarget(chatId: string): ProviderAccount | null {
+  const chat = getChatById(chatId);
+  if (chat === undefined || chat.handoff !== null || isSwitchSending(chatId)) return null;
+  return pendingSwitchTarget(chatId);
+}
+
+/** The account a switch this page armed is taking the chat to while it is being sent or carried
+ *  out; null when no such switch is underway. */
+export function underwaySwitchTarget(chatId: string): ProviderAccount | null {
+  const chat = getChatById(chatId);
+  if (chat === undefined || !(isSwitchSending(chatId) || isSwitchUnderway(chat))) return null;
+  return pendingSwitchTarget(chatId);
 }
 
 /** Whether a switch is still being carried out, so the choice it is carrying is not spent yet. A

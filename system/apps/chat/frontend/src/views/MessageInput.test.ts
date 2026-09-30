@@ -82,12 +82,19 @@ vi.mock("../models/Response", () => ({
   mintMessageId: () => `m-${Math.random().toString(36).slice(2)}`,
 }));
 vi.mock("../models/Handoffs", () => ({ switchChat: mocks.switchChat, cancelHandoff: mocks.cancelHandoff }));
-vi.mock("../models/PendingLane", () => ({
-  pendingSwitchTarget: () => mocks.switching.target,
-  getPendingPick: () => mocks.switching.pick,
-  setPendingAccount: mocks.setPendingAccount,
-  switchKind: () => mocks.switching.kind,
-}));
+// The armed choice is served from here; whether a switch request is out is the real module's.
+vi.mock("../models/PendingLane", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../models/PendingLane")>();
+  return {
+    isSwitchSending: actual.isSwitchSending,
+    setSwitchSending: actual.setSwitchSending,
+    nextSendSwitchTarget: (chatId: string) =>
+      mocks.switching.handoff !== null || actual.isSwitchSending(chatId) ? null : mocks.switching.target,
+    getPendingPick: () => mocks.switching.pick,
+    setPendingAccount: mocks.setPendingAccount,
+    switchKind: () => mocks.switching.kind,
+  };
+});
 vi.mock("./SwitchDialog", () => ({ openSwitchDialog: mocks.openSwitchDialog }));
 vi.mock("./fast-mode-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./fast-mode-limit")>()),
@@ -937,6 +944,38 @@ describe("MessageInput switching harness", () => {
     const [, accountId, , , pick] = mocks.switchChat.mock.calls[0] as unknown as unknown[];
     expect(accountId).toBe("acct-anthropic-2");
     expect(pick).toEqual({ model_id: "haiku", effort: "low", fast: false });
+  });
+
+  it("says nothing more about the switch once its message has gone, and holds a second send until it is answered", async () => {
+    mocks.switching.target = TARGET;
+    let answer: (value: { kind: string; phase: string; returned_block: string }) => void = () => undefined;
+    mocks.switchChat.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const component = MessageInput();
+    press(findByAttr(typeDraft(component, "agent-1", "Carry on in Codex"), "aria-label", "Switch and send"));
+    await flushAsync();
+    expect(mocks.switchChat).toHaveBeenCalledTimes(1);
+
+    // The message is on its way: "your next message switches" would now be about the one after it.
+    const sending = typeDraft(component, "agent-1", "And one more thing");
+    expect(findByClass(sending, "message-input-switch-strip")).toBeUndefined();
+    expect(findByAttr(sending, "aria-label", "Switch and send")).toBeUndefined();
+    press(findByAttr(sending, "aria-label", "Send message"));
+    await flushAsync();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(mocks.switchChat).toHaveBeenCalledTimes(1);
+    expect(findByTag(component.view!({ attrs: { chatId: "agent-1" } } as never), "textarea")?.attrs?.value).toBe(
+      "And one more thing",
+    );
+
+    answer({ kind: "handoff", phase: "summarizing", returned_block: "" });
+    await flushAsync();
+    mocks.switching.handoff = handoffStateFixture({ phase: "summarizing" });
+    const running = component.view!({ attrs: { chatId: "agent-1" } } as never);
+    expect(findByClass(running, "message-input-switch-strip")).toBeUndefined();
   });
 
   it("shows no strip while the switch is already running", () => {

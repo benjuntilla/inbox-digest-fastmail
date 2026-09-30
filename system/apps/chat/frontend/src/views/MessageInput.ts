@@ -16,7 +16,13 @@ import { buildMessageWithAttachments, formatFileSize } from "../models/attachmen
 import { stageElementReferences } from "../models/elementReferences";
 import { drainToComposer, getEventsForChat, interruptAgent, mintMessageId, sendMessage } from "../models/Response";
 import { cancelHandoff, switchChat } from "../models/Handoffs";
-import { getPendingPick, pendingSwitchTarget, setPendingAccount } from "../models/PendingLane";
+import {
+  getPendingPick,
+  isSwitchSending,
+  nextSendSwitchTarget,
+  setPendingAccount,
+  setSwitchSending,
+} from "../models/PendingLane";
 import type { ProviderAccount } from "../models/Providers";
 import { openSwitchDialog } from "./SwitchDialog";
 import { addOutgoing, clearOutgoing, dropOutgoing, getOutgoingMessages } from "../models/OutgoingMessages";
@@ -253,9 +259,8 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
   let externalRetry: (() => Promise<void>) | null = null;
   let fileInputElement: HTMLInputElement | null = null;
   let isInterruptInFlight = false;
-  // The switch to the pending lane (spec 5.1): the handoff request is out, or the cancel of a
-  // running switch is out.
-  let isSwitchInFlight = false;
+  // The cancel of a running switch is out. (The switch request's own flag is the pending lane's,
+  // since the model bar reads it too.)
   let isCancelSwitchInFlight = false;
 
   function focusMessageTextarea(): void {
@@ -356,7 +361,6 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
         currentChatId = chatId;
         messageText = localStorage.getItem(messageTextKey(chatId)) ?? "";
         isInterruptInFlight = false;
-        isSwitchInFlight = false;
         isCancelSwitchInFlight = false;
         // The notices name a command typed for the previous agent, so they must not follow the
         // user to the next one.
@@ -602,14 +606,15 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
        * draining took off the old agent comes back for the composer.
        */
       async function handleSwitchAndSend(target: ProviderAccount): Promise<void> {
-        if (!chatId || isSwitchInFlight) {
+        if (!chatId || isSwitchSending(chatId)) {
           return;
         }
-        isSwitchInFlight = true;
+        const sendingChatId = chatId;
+        setSwitchSending(sendingChatId, true);
         m.redraw();
         const prepared = await prepareSend();
         if (prepared === null) {
-          isSwitchInFlight = false;
+          setSwitchSending(sendingChatId, false);
           m.redraw();
           return;
         }
@@ -633,7 +638,7 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
             actionFailureDetail = detail;
           }
         } finally {
-          isSwitchInFlight = false;
+          setSwitchSending(sendingChatId, false);
           m.redraw();
         }
         refocusAfterSend();
@@ -725,6 +730,11 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
 
       /** Enter and the send button do the same thing: send, or carry the armed switch out. */
       function handleSubmit(): Promise<void> {
+        // Held until the switch request is answered: sent now, the message would reach the agent
+        // the chat is leaving, ahead of the switch.
+        if (chatId && isSwitchSending(chatId)) {
+          return Promise.resolve();
+        }
         if (switchTarget !== null) {
           return chatId && canSend ? handleSwitchAndSend(switchTarget) : Promise.resolve();
         }
@@ -1103,9 +1113,8 @@ export function MessageInput(): m.Component<{ chatId: string | null }> {
 
       const chat = getChatById(chatId);
       // The switch the chat is in the middle of, if any, and the one the next send would start.
-      // Nothing is pending once a switch is running: the lane was applied by confirming it.
       const handoff = chat?.handoff ?? null;
-      const switchTarget = handoff === null ? pendingSwitchTarget(chatId) : null;
+      const switchTarget = nextSendSwitchTarget(chatId);
 
       // The stop button is only meaningful while the agent has an interruptible
       // turn in progress -- the same condition that drives the activity indicator

@@ -136,7 +136,7 @@ import { hoverTooltipText } from "@imbue/workspace-ui/src/testing/tooltip";
 
 import type { ChatSnapshot } from "../models/Chats";
 import { chatSnapshotFixture, handoffStateFixture, rebindStateFixture } from "../models/chatSnapshotFixture";
-import { getPendingAccountId, setPendingAccount, setPendingSwitch } from "../models/PendingLane";
+import { getPendingAccountId, setPendingAccount, setPendingSwitch, setSwitchSending } from "../models/PendingLane";
 import { ModelProviderMenu } from "./ModelProviderMenu";
 import * as css from "./modelProviderMenuStyles";
 
@@ -231,6 +231,7 @@ beforeEach(() => {
   settingsState.choice = { identity: { model_id: "opus", effort: null, fast: false }, matched: OPUS, pending: null };
   providerState.accounts = [ACCOUNT];
   setPendingAccount("a1", null);
+  setSwitchSending("a1", false);
 });
 
 describe("the combo card", () => {
@@ -683,7 +684,67 @@ describe("the combo card", () => {
     });
     render();
     expect(ROOT().textContent).toContain("Opus · High");
-    expect(ROOT().textContent).toContain("next");
+    // Its message has gone: the switch is being carried out, not waiting on the next one.
+    expect(ROOT().textContent).not.toContain("next");
+  });
+
+  describe("once the armed switch's message has gone", () => {
+    const CODEX_ACCOUNT = {
+      ...ACCOUNT,
+      id: "acct-2",
+      provider: "OpenAI",
+      harness: "codex",
+      harness_label: "Codex",
+      label: "OpenAI (Codex)",
+    };
+    const ASTRA_PICK = {
+      identity: { model_id: "gpt-6-astra", effort: "high", fast: false },
+      label: "GPT-6 Astra · High",
+      option: { ...OPUS, id: "gpt-6-astra", label: "GPT-6 Astra" },
+    };
+
+    beforeEach(() => {
+      providerState.accounts = [ACCOUNT, CODEX_ACCOUNT];
+    });
+
+    it("names the pick without the next mark while the request is out", () => {
+      setPendingSwitch("a1", "acct-2", ASTRA_PICK);
+      setSwitchSending("a1", true);
+      render();
+      expect(ROOT().textContent).toContain("GPT-6 Astra · High");
+      expect(ROOT().textContent).not.toContain("next");
+    });
+
+    it("names the target, not next, while the switch runs, with rows that state it rather than offer it", () => {
+      setPendingAccount("a1", "acct-2");
+      agentState.agent = chatSnapshotFixture("a1", {
+        active_agent: { harness: "claude", account_id: "acct-1" },
+        handoff: handoffStateFixture({ phase: "summarizing" }),
+      });
+      render();
+      // No pick: the harness has not said what its default is yet, so the chip names the harness.
+      expect(ROOT().textContent).toContain("Codex");
+      expect(ROOT().textContent).not.toContain("next");
+      click(".model-selector-trigger");
+      expect(document.querySelector('[data-menu-row="providers"]')?.textContent).toContain("switching");
+      expect(document.querySelector('[data-menu-row="providers"]')?.textContent).not.toContain("next message");
+      expect(document.querySelector('[data-menu-row="model"]')?.textContent).toContain("Default model");
+      expect(document.querySelector('[data-menu-row="model"] button')).toBeNull();
+    });
+
+    it("reads the live choice, with no next mark anywhere, after the switch failed", () => {
+      setPendingAccount("a1", "acct-2");
+      agentState.agent = chatSnapshotFixture("a1", {
+        active_agent: { harness: "claude", account_id: "acct-1" },
+        handoff: handoffStateFixture({ phase: "failed", error: "boom", failed_step: "start" }),
+      });
+      render();
+      expect(ROOT().textContent).toContain("Opus");
+      expect(ROOT().textContent).not.toContain("next");
+      click(".model-selector-trigger");
+      click('[data-menu-row="providers"]');
+      expect(document.querySelector('[data-menu-part="submenu"]')?.textContent).not.toContain("next");
+    });
   });
 
   it("drops a failed switch's pick, which the chat keeps for the retry but never applied", () => {

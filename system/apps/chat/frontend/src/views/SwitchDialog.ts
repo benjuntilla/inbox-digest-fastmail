@@ -35,7 +35,7 @@ import {
 import type { PendingPick } from "../models/PendingLane";
 import { accountForAgent } from "../models/Providers";
 import type { ProviderAccount } from "../models/Providers";
-import { getEventsForChat, isTranscriptLoaded, mintMessageId } from "../models/Response";
+import { getEventsForChat, isTranscriptLoaded, mintMessageId, whenTranscriptLoadSettles } from "../models/Response";
 import { startChatOnAccount } from "../shell";
 import { harnessLabel } from "./harness-labels";
 import { capitalizeEffort, modelPickLabel } from "./model-pick-label";
@@ -73,6 +73,17 @@ let open: OpenDialog | null = null;
  * short by the press. A handoff with context gets the dialog.
  */
 export function beginSwitchTo(chatId: string, target: ProviderAccount): void {
+  // A new chat's page asks for its transcript before the chat app knows the chat and asks again
+  // once it does, so a press right after the chat comes up can land before that load: wait it out
+  // rather than read the not-yet-loaded window.
+  if (isTranscriptLoaded(chatId)) {
+    decideSwitchTo(chatId, target);
+    return;
+  }
+  void whenTranscriptLoadSettles(chatId).then(() => decideSwitchTo(chatId, target));
+}
+
+function decideSwitchTo(chatId: string, target: ProviderAccount): void {
   const chat = getChatById(chatId);
   if (chat === undefined || !isSwitchTarget(chat, target)) return;
   // Only a loaded transcript can say there is no user turn: an unloaded (or failed) one reads as

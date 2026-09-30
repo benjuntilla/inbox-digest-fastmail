@@ -20,6 +20,9 @@ const state = vi.hoisted(() => {
     draftAttachments: [] as unknown[],
     isStartAccepted: true,
     isTranscriptLoaded: true,
+    // What a load in flight lands, when the transcript has not loaded: its events, or null for a
+    // load that fails (or none at all).
+    loadLands: null as unknown[] | null,
     restored: [] as unknown[],
   };
 });
@@ -38,6 +41,13 @@ vi.mock("../models/Providers", () => ({
 vi.mock("../models/Response", () => ({
   getEventsForChat: () => state.events,
   isTranscriptLoaded: () => state.isTranscriptLoaded,
+  whenTranscriptLoadSettles: () => {
+    if (state.loadLands !== null) {
+      state.events = state.loadLands;
+      state.isTranscriptLoaded = true;
+    }
+    return Promise.resolve(state.isTranscriptLoaded);
+  },
   mintMessageId: () => "m-1",
 }));
 vi.mock("../models/Handoffs", () => ({
@@ -151,6 +161,7 @@ describe("the switch dialog", () => {
     state.draftAttachments = [];
     state.isStartAccepted = true;
     state.isTranscriptLoaded = true;
+    state.loadLands = null;
     setPendingAccount("agent-1", null);
     // The dialog is module state: a test that leaves it up would render into the next one's root.
     closeSwitchDialog();
@@ -166,7 +177,32 @@ describe("the switch dialog", () => {
     expect(getPendingAccountId("agent-1")).toBeNull();
   });
 
-  it("asks rather than switching at once when the transcript has not loaded", async () => {
+  it("waits out a load in flight on a new chat, and switches it at once when it has no user turn", async () => {
+    // A new chat's page asks for its transcript again once the chat app lists it; a press right
+    // after lands before that load does. Nothing may be armed: there is nothing to hand over.
+    state.isTranscriptLoaded = false;
+    state.events = [];
+    state.loadLands = [WELCOME];
+    beginSwitchTo("agent-1", CODEX as ProviderAccount);
+    await flush();
+    expect(state.switches).toEqual([["agent-1", "acct-openai", "", "m-1"]]);
+    render();
+    expect(ROOT().textContent).toBe("");
+    expect(getPendingAccountId("agent-1")).toBeNull();
+  });
+
+  it("waits out a load in flight, and asks when the chat turns out to have a user turn", async () => {
+    state.isTranscriptLoaded = false;
+    state.events = [];
+    state.loadLands = [WELCOME, TYPED];
+    beginSwitchTo("agent-1", CODEX as ProviderAccount);
+    await flush();
+    expect(state.switches).toEqual([]);
+    render();
+    expect(ROOT().textContent).toContain("Switch to Codex?");
+  });
+
+  it("asks rather than switching at once when the transcript does not load", async () => {
     // The window is empty because nothing landed, not because the chat is new: acting on it would
     // switch a chat of any length with no dialog, no summary and no message.
     state.isTranscriptLoaded = false;

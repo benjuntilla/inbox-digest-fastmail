@@ -5,7 +5,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 ## Overview
 
 - Compact mode is the desktop layout squeezed into a phone: a taskbar of icon-and-title chips that overflows past four windows, a landing on bare wallpaper, windows switched by minimize and restore, and every right-click verb unreachable because nothing on a phone right-clicks. The apps inherit the same squeeze: the chat rail collapses to a strip of monograms, the file viewer's table needs 538px, the terminal has no way to raise the keyboard.
-- The phone gets its own layout instead of a squeezed desktop: a bottom bar with home, a pill naming the window you are in, and a plus; a home grid of apps; a windows sheet; a start sheet that is the launcher's menu made tappable. It replaces compact mode entirely and is chosen by the viewport's shorter side being under 700px, so rotating a phone keeps it and no iPad gets it.
+- The phone gets its own layout instead of a squeezed desktop: a bottom bar with home, a pill naming the window you are in, and a plus; a home grid of apps; a windows sheet; a start sheet that is the launcher's menu made tappable. It replaces compact mode entirely and is chosen by a phone-sized viewport (at most 500px one way and 1000px the other), so rotating a phone keeps it and no iPad or short-but-wide desktop window gets it.
 - Desktops are not a phone concept. The phone lists every window of every desktop in one flat list and never names, switches or edits a desktop. Windows it opens go to the first desktop, unplaced, which is exactly what an agent's unplaced `open` does today: laptop clients find them minimized at the bottom of their taskbar, and browsing on the phone never rearranges anyone's windows.
 - The phone's own notion of "the window I am looking at" is per client and stored on the server as a short history, so a reload lands where you left off, the windows sheet can order by recency, and agent ops that target the phone know what it shows.
 - The pinned chat window keeps its rules: exactly one, never closed, its avatar in the pill, chats switched inside it from a drawer. Every other window is a full-page view of the app's page with only that page mounted, plus the chat page, which stays mounted because it is the landing page.
@@ -17,8 +17,8 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ### Choosing the layout
 
-- The phone layout is on while `min(viewport width, viewport height) < 700px`, read as one `matchMedia` query (`(max-width: 700px), (max-height: 700px)`) that sets `data-phone` on the root. `data-compact` is gone. `data-touch` is unchanged and orthogonal.
-- Every phone in portrait or landscape gets it; no iPad does (the iPad mini's shorter side is 744px). A desktop browser window under 700px tall gets it too, which is accepted.
+- The phone layout is on while `min(viewport width, viewport height) <= 500px` and `max(viewport width, viewport height) <= 1000px`, read as one `matchMedia` query (`(max-width: 500px) and (max-height: 1000px), (max-height: 500px) and (max-width: 1000px)`) that sets `data-phone` on the root. `data-compact` is gone. `data-touch` is unchanged and orthogonal.
+- Every phone in portrait or landscape gets it (the largest are about 440px by 956px); no iPad does (the iPad mini's shorter side is 744px). Nor does the Studio's window, which cannot be made smaller than 800px by about 560px of workspace, or any desktop window wider than 1000px however short. A desktop browser window at most 500px by 1000px gets it, which is accepted.
 - Switching between layouts on resize is live, as compact mode's toggle is today. The desktop layout is untouched apart from the toasts and the removal of compact-only branches.
 
 ### The bar
@@ -92,7 +92,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ### The terminal
 
-- Under 700px on the wrapper page's shorter side, with a coarse pointer, a tap anywhere on the terminal focuses it and raises the keyboard, and a key strip above the keyboard offers Esc, Tab, Ctrl (one-shot: the next key is sent with it), and the arrows.
+- On a phone-sized wrapper page (the shell's rule), with a coarse pointer, a tap anywhere on the terminal focuses it and raises the keyboard, and a key strip above the keyboard offers Esc, Tab, Ctrl (one-shot: the next key is sent with it), and the arrows.
 - The soft keyboard opening or closing produces a resize the ttyd frame sees, so its grid refits; the page uses `100dvh`.
 
 ### The browser
@@ -117,7 +117,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ### Shell frontend (`system/apps/system_interface/frontend/src/`)
 
-- `theme/metrics.ts`: `PHONE_MEDIA_QUERY = "(max-width: 700px), (max-height: 700px)"`, `PHONE_ATTRIBUTE = "data-phone"`, `RenderModes.isPhone` replacing `isCompact`; `COMPACT_*` removed. `theme/default.css`: phone tokens (`--desk-phone-bar-height`, `--desk-phone-control-width`, `--desk-phone-control-height`, `--desk-phone-pill-height`, `--desk-phone-sheet-radius`, `--desk-toast-*`); every `[data-compact]` rule deleted or rewritten under `[data-phone]`.
+- `theme/metrics.ts`: `PHONE_MEDIA_QUERY = "(max-width: 500px) and (max-height: 1000px), (max-height: 500px) and (max-width: 1000px)"`, `PHONE_ATTRIBUTE = "data-phone"`, `RenderModes.isPhone` replacing `isCompact`; `COMPACT_*` removed. `theme/default.css`: phone tokens (`--desk-phone-bar-height`, `--desk-phone-control-width`, `--desk-phone-control-height`, `--desk-phone-pill-height`, `--desk-phone-sheet-radius`, `--desk-toast-*`); every `[data-compact]` rule deleted or rewritten under `[data-phone]`.
 - `model/records.ts`: `ClientRecord.shown_history`, `Inventory.workspace_name`, parsers. `model/api.ts`: `recordShown(clientId, windowId | null)`, `openWindow` and `launch` carry `isMinimized`, sent as `minimized`.
 - `reducers/desktopState.ts`: `DesktopState` gains `phone: PhoneState` (`shown: {kind: "home"} | {kind: "window", windowId} | null`, `history`, `sheet: "windows" | "start" | null`; which menu is open is the phone layout view's own) and `workspaceName`; events for show, sheet, history load, and the workspace name, with window removal followed by the store. Pure selectors in a new `reducers/phone.ts`: `phoneLanding(state)`, `windowsSheetRows(state)` (recency then newest), `homeGridApps(state)` (launcher order via `model/launch.ts` `orderAppLaunches`), `focusTargetOf(state, app)` (active-desktop stack top via `geometry/stack.ts`, else newest anywhere), `pinnedChatWindowOf(state)` (the active desktop's), `phonePillOf(state)`, `openWindowCount(state)`.
 - `store/DesktopStore.ts`: `showOnPhone(target)` (dispatch, `api.recordShown`, page policy), `goHome()`, `openWindowAt` and `launchAt` opening on a phone at the first desktop with `minimized: true` and then showing the window, `closeAllWindows()` (sequential closes), `runHomeTile(app)`, `handleLayoutOp` mapping a `show`, `open` or `focus` aimed at this client to `showOnPhone`, `desktops_updated` handling that goes home when the shown window is gone, `onVisibilityChange(isVisible)`. `StoreDependencies.notify` goes: the store owns a `toasts` queue (`model/Toasts.ts`), and every `alert(` in the store and `index.ts` becomes a toast.
@@ -142,7 +142,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ### Terminal (`system/apps/terminal/src/terminal_app/pages.py`, `pty_page.py`, `dispatch.py`)
 
-- The wrapper page template gains a `#keys` strip shown under 700px on the shorter side with a coarse pointer; keys post `{type: "terminal:key", key, ctrl}` and Ctrl `{type: "terminal:ctrl", armed}`. The pty origin's page gets a script (`terminal_app/pty_page.py`, added to the ttyd client as it is installed; see Decisions) that listens, feeds xterm, and focuses it from a tap in its own frame. The wrapper uses `100dvh` and re-nudges the frame height on `visualViewport` resize so ttyd refits.
+- The wrapper page template gains a `#keys` strip shown on a phone-sized page (the shell's rule) with a coarse pointer; keys post `{type: "terminal:key", key, ctrl}` and Ctrl `{type: "terminal:ctrl", armed}`. The pty origin's page gets a script (`terminal_app/pty_page.py`, added to the ttyd client as it is installed; see Decisions) that listens, feeds xterm, and focuses it from a tap in its own frame. The wrapper uses `100dvh` and re-nudges the frame height on `visualViewport` resize so ttyd refits.
 - `dispatch_test.py` for the script's insertion into the installed client; `test_phone_keys.py`, a `browser` test, for the strip posting keys into a recording frame and the script feeding them to xterm.
 
 ### Browser (`system/apps/browser/src/browser/assets/index.html`)
@@ -157,7 +157,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 ## Implementation phases
 
 1. **Backend state and routes.** Shown history on the client record and its route, `minimized` on the windows route, inventory fields, the workspace name setting. Desktop unaffected; tests green.
-2. **Phone layout skeleton.** The shorter-side mode, `PhoneLayout` with page host (shown plus pinned mounting), bar, home grid, windows sheet and start sheet over the existing store; landing and deep links; the window menu; toasts replacing `alert()` on both layouts; the compact-only branches deleted. The two existing phone e2e scenarios rewritten. A phone can now do everything the desktop could in compact mode, minus minimize.
+2. **Phone layout skeleton.** The phone-sized mode, `PhoneLayout` with page host (shown plus pinned mounting), bar, home grid, windows sheet and start sheet over the existing store; landing and deep links; the window menu; toasts replacing `alert()` on both layouts; the compact-only branches deleted. The two existing phone e2e scenarios rewritten. A phone can now do everything the desktop could in compact mode, minus minimize.
 3. **Switching and resilience.** Agent-op and own-action switching, go-home on removal, visibility resync, close-all with confirm, drag-to-dismiss, long-press menus.
 4. **Install polish.** Title, touch icon, manifest, theme color, safe areas, `dvh`.
 5. **Chat app phone layout.** Header, drawer, row and header kebabs, composer settings button and menu variant, empty state; chat e2e.
@@ -167,7 +167,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ## Testing strategy
 
-- **Frontend unit (vitest)**: `reducers/phone.test.ts` for landing choice (window, home, none), windows-sheet ordering (recency then newest, pinned once), focus target (active-desktop stack top, else newest), pill label and count; `metrics.test.ts` for the shorter-side query; `livePages.test.ts` for the mount policy destroying hidden pages except the pinned one; `DesktopStore.test.ts` for `showOnPhone` posting the route, go-home on removal, and `notify` producing a toast rather than an alert.
+- **Frontend unit (vitest)**: `reducers/phone.test.ts` for landing choice (window, home, none), windows-sheet ordering (recency then newest, pinned once), focus target (active-desktop stack top, else newest), pill label and count; `metrics.test.ts` for the phone-sized query; `livePages.test.ts` for the mount policy destroying hidden pages except the pinned one; `DesktopStore.test.ts` for `showOnPhone` posting the route, go-home on removal, and `notify` producing a toast rather than an alert.
 - **Backend (pytest)**: shown-history bound, pruning on close, `404` for an unknown window; `minimized` opens leave other clients unplaced; inventory carries `workspace_name` and `shown_history`; the icon and manifest routes.
 - **Shell e2e (Playwright, Chromium, 393x852 and 852x393)**: both sizes render the phone layout; landing on the pinned chat; a laptop-opened window appears in the sheet and is minimized nowhere but shown on the phone without changing the laptop's placements; opening from the start sheet lands on the first desktop and reads minimized for the laptop client; the home grid focuses an existing window and launches when none; the sheet orders by what was shown; X closes; Close all confirms and closes every non-pinned window; the pill's long-press offers Refresh and Quit; Enter in the start sheet runs the top match and New Chat for a message; a window closed by the laptop sends the phone home; a failed open shows a toast. The existing two compact tests are rewritten to these expectations and their compact-chrome assertions dropped.
 - **Chat e2e (narrow viewport)**: drawer open and close, header kebab rename, row kebab stop, composer settings button opens the menu with the effort segments and Source view, draft restored after reload.
@@ -185,5 +185,5 @@ The questions this plan left open, as they were settled:
 - **Focus target across desktops.** As read above: the active desktop's stack top, else the app's newest window anywhere.
 - **Recording "home".** Through the same route with `window_id: null`.
 - **Agent ops a phone follows.** The shell announces every targeted `show`, placed `open`, and `focus` to the target client as a `layout_op` naming the window (contracts.md section 6), which is how a phone learns what an agent put on its screen.
-- **The terminal's key strip** shows on the same shorter-side rule as the shell's layout, so a phone on its side keeps it, and only with a coarse pointer: the rule reads the window's own page, and a laptop's terminal windows are mostly under 700px tall.
+- **The terminal's key strip** shows on the same phone-sized rule as the shell's layout, so a phone on its side keeps it, and only with a coarse pointer: the rule reads the window's own page, and a laptop's terminal windows are often that small.
 - **Follow-ups deliberately deferred**: browser-history integration for the back gesture; touch input and tab close for the browser app; agent notifications on phone browsers; a phone kind visible to agents; WebKit e2e; the avatar chooser and desktop settings on the phone; per-window status in the sheet and pill.

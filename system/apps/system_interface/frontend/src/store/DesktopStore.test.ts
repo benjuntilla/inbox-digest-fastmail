@@ -1664,7 +1664,7 @@ describe("pulled-out windows", () => {
       placements: [placementRecord("win-1", { is_detached: true })],
     });
     const { store, calls } = makePopOutStore("win-1");
-    // A pulled-out window under the phone breakpoint on either side reads as a phone's viewport.
+    // A pulled-out window as small as a phone reads as a phone's viewport.
     store.setThemeMetrics(METRICS, { isPhone: true, isTouch: false });
     await store.start(NO_LINK);
     socket.deliver().onConnected();

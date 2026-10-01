@@ -35,7 +35,7 @@ Windows are positioned boxes that a separate live-page layer mirrors; they are n
 | System tray | -- | The taskbar's right end, a row of tray widgets | Taskbar | status area |
 | Tray widget | -- | One self-contained thing in the tray; V1 ships Desktops | Taskbar | applet, indicator |
 | Theme | design system tokens | The token table every component reads: colours, type, radii, metrics | Build-time file in V1 | skin |
-| Phone layout, touch mode | device kind `mobile` | Two render policies, from the viewport's shorter side and from pointer type | Derived at render time | mobile mode |
+| Phone layout, touch mode | device kind `mobile` | Two render policies, from the viewport's size and from pointer type | Derived at render time | mobile mode |
 
 The sections below define each one.
 
@@ -138,9 +138,9 @@ V1 ships one theme; switching themes is deferred.
 ### 2.11 The phone layout and touch mode
 
 Two independent render policies, each from a live media query, neither stored.
-The phone layout (the viewport's shorter side under the phone breakpoint): a bar, a home grid, and one window at a time instead of the desktop, over the same windows and desktops (`plan-phone-interface.md`).
+The phone layout (a phone-sized viewport, either way round): a bar, a home grid, and one window at a time instead of the desktop, over the same windows and desktops (`plan-phone-interface.md`).
 Touch mode (coarse pointer): larger hit targets, long-press instead of right-click, no hover-revealed controls, no resize handles.
-A phone is both; a desktop window under the breakpoint on either side is phone only; a touch laptop or a tablet is touch only.
+A phone is both; a desktop window as small as a phone is phone only; a touch laptop or a tablet is touch only.
 Nothing branches on a stored device kind, and the client record no longer carries one.
 
 ## 3. How they relate

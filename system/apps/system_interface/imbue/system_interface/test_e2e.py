@@ -1869,7 +1869,7 @@ def test_the_avatar_wears_the_mood_of_the_agents_file_and_the_chooser_changes_ev
 
 
 # A phone-shaped browser context, inlined so the emulated UA is pinned rather than drifting with the Playwright
-# version. The shell reads the phone layout off the viewport's shorter side and touch off the coarse pointer.
+# version. The shell reads the phone layout off the viewport's size and touch off the coarse pointer.
 _MOBILE_CONTEXT_ARGS: dict[str, Any] = {
     "user_agent": (
         "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -1923,6 +1923,31 @@ def _long_press(target: Locator) -> None:
 def _shown_history(base_url: str, client_id: str) -> list[str]:
     (client,) = [client for client in _get_json(f"{base_url}/api/clients")["clients"] if client["id"] == client_id]
     return list(client["shown_history"])
+
+
+@pytest.mark.timeout(120, func_only=False)
+def test_only_a_phone_sized_viewport_gets_the_phone_layout(e2e_server: E2EServer, page: Page) -> None:
+    """Phones either way round get the phone layout; a tablet, the Studio's smallest window, and a desktop window
+    that is short but wide keep the desktop. The layout follows the viewport live, without a reload."""
+    _land(page, e2e_server)
+    # Each size flips the layout, so every assertion waits for the media query's change rather than passing on the
+    # state the previous size left.
+    sizes_and_phone = [
+        ((393, 852), True),
+        ((800, 562), False),
+        ((852, 393), True),
+        ((1255, 561), False),
+        ((440, 956), True),
+        ((1200, 480), False),
+        ((956, 440), True),
+        ((744, 1133), False),
+    ]
+    for (width, height), is_phone in sizes_and_phone:
+        page.set_viewport_size({"width": width, "height": height})
+        if is_phone:
+            expect(page.locator("html"), f"{width}x{height}").to_have_attribute("data-phone", "")
+        else:
+            expect(page.locator("html"), f"{width}x{height}").not_to_have_attribute("data-phone", "")
 
 
 @pytest.mark.timeout(120, func_only=False)

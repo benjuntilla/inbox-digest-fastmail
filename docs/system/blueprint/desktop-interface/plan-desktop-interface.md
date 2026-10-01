@@ -34,7 +34,7 @@ The full definitions are in [concepts.md](concepts.md); this table is the vocabu
 | Launcher | The taskbar's text field and the menu it opens |
 | Tray widget | One component of the system tray; V1: Desktops |
 | Live page | The one iframe a client keeps for one window |
-| Phone layout, touch mode | Render policies from the viewport's shorter side and the pointer type |
+| Phone layout, touch mode | Render policies from the viewport's size and the pointer type |
 
 Retired: project, view, Everything, tab, panel, pane, instance (in the shell), address, dock (both senses), rail, New Tab page, seed layout, device kind.
 
@@ -267,12 +267,12 @@ The menu is never persisted and never a window.
 
 ### 4.12 The phone layout and touch mode
 
-A viewport whose shorter side is under the phone breakpoint gets the phone layout instead of the desktop, as `plan-phone-interface.md` specifies.
+A phone-sized viewport gets the phone layout instead of the desktop, as `plan-phone-interface.md` specifies.
 Touch mode is on while the primary pointer is coarse.
 Both are `matchMedia` subscriptions that set `data-phone` and `data-touch` on the root element; every style keys off those attributes, and every behaviour reads the same two flags, so there is one source for each.
 
 Touch: hit targets are at least the theme's touch target size; long-press replaces right-click on windows, entries, and shortcuts; hover-revealed controls are always shown; resize handles are hidden; the inert-page rule and the shield work unchanged, since touch fires pointer events.
-A phone is both; a desktop browser window under the breakpoint in height or width is phone only; a touch laptop or a tablet is touch only.
+A phone is both; a desktop browser window as small as a phone is phone only; a touch laptop or a tablet is touch only.
 
 ### 4.13 Keyboard
 
@@ -365,7 +365,7 @@ Touch needs nothing extra beyond `touch-action: none` on handles.
 
 `theme/default.css` extends `base.css` with the desktop tokens of contracts.md section 11.
 `metrics.ts` reads the ones behaviour needs (title bar height, taskbar heights, cell sizes, inset, minimum window size, minimum visible title width, snap threshold, drag threshold, touch target size) from `getComputedStyle(document.documentElement)` once at boot and again on `data-phone` or `data-touch` change, and hands the store a frozen `ThemeMetrics`.
-No metric is a literal in TypeScript, and the phone breakpoint is the one exception in the other direction: it is a TypeScript constant applied as a `matchMedia` query on the viewport's shorter side that sets `data-phone`, and CSS keys off the attribute, so it too lives once.
+No metric is a literal in TypeScript, and the phone breakpoint is the one exception in the other direction: it is a TypeScript constant applied as a `matchMedia` query on the viewport's size that sets `data-phone`, and CSS keys off the attribute, so it too lives once.
 
 ## 7. The app contract (v2)
 

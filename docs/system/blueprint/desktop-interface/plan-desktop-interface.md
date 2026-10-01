@@ -272,7 +272,7 @@ Touch mode is on while the primary pointer is coarse.
 Both are `matchMedia` subscriptions that set `data-phone` and `data-touch` on the root element; every style keys off those attributes, and every behaviour reads the same two flags, so there is one source for each.
 
 Touch: hit targets are at least the theme's touch target size; long-press replaces right-click on windows, entries, and shortcuts; hover-revealed controls are always shown; resize handles are hidden; the inert-page rule and the shield work unchanged, since touch fires pointer events.
-A phone is both; a desktop browser window under the breakpoint in height or width is phone only; a touch laptop or a tablet is touch only.
+A phone is both; a desktop browser window as small as a phone is phone only; a touch laptop or a tablet is touch only.
 
 ### 4.13 Keyboard
 

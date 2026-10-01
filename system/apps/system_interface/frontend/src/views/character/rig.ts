@@ -213,8 +213,8 @@ const SHADOW_FADE = 0.55;
  * kidney bean rather than a body.
  */
 const BUSY_DENT_DEPTH = 0.09;
-const BUSY_DENT_HOLD = 0.35;
-const BUSY_DENT_GAP: readonly [number, number] = [0.08, 0.3];
+const BUSY_DENT_HOLD = 0.5;
+const BUSY_DENT_GAP: readonly [number, number] = [0.12, 0.45];
 
 /**
  * Downward acceleration for a hop, in radii per second squared.

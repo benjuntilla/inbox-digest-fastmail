@@ -186,6 +186,19 @@ describe("a mouse resting on it", () => {
     expect(Math.abs(placeOf(root).x - rest)).toBeLessThan(0.5);
   });
 
+  it("holds where the mouse came in, however it moves across", async () => {
+    const { root, svg } = sized();
+    await runFrames(2);
+    pointer(svg, "pointerenter", "mouse", 100, 50);
+    await runFrames(60);
+    const held = placeOf(root);
+    // Across to the left edge: still shied leftward from the right, where it came in.
+    pointer(svg, "pointermove", "mouse", 50, 50);
+    pointer(svg, "pointermove", "mouse", 0, 50);
+    await runFrames(60);
+    expect(placeOf(root).x).toBeCloseTo(held.x, 0);
+  });
+
   it("is a mouse's alone: a finger does not hover", async () => {
     const { root, svg } = sized();
     await runFrames(2);

@@ -250,10 +250,10 @@ describe("a hover", () => {
     hover(hovered, 0, 0);
     run(hovered, 120);
     run(untouched, 120);
-    // The rightmost anchor sits at angle 0; it comes in, but by a few percent at most.
+    // The rightmost anchor sits at angle 0; it comes in, but by a couple of percent at most.
     const right = (rig: BlobRig) => Math.max(...rig.frame().anchors.map((a) => a.x));
     expect(right(hovered)).toBeLessThan(right(untouched));
-    expect(right(hovered)).toBeGreaterThan(right(untouched) * 0.9);
+    expect(right(hovered)).toBeGreaterThan(right(untouched) * 0.95);
   });
 
   it("settles back when the pointer leaves", () => {

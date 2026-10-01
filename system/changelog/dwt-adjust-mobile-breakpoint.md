@@ -1,0 +1,1 @@
+The desktop-interface contracts and the phone, launcher and pinned-taskbar plans now state the new phone breakpoint: at most 500px on the short side and 1000px on the long side, in place of a shorter side under 700px.

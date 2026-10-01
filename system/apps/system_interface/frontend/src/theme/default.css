@@ -5,7 +5,7 @@
    target, the floating entry's size and insets) is read from these tokens once at boot and again
    when the render mode changes (theme/metrics.ts), so no number lives in both CSS and
    TypeScript. The phone breakpoint is the one value that lives in TypeScript instead
-   (PHONE_MAX_SIDE_PX), applied as a matchMedia query that sets data-phone on the root
+   (PHONE_MAX_SHORT_SIDE_PX and PHONE_MAX_LONG_SIDE_PX), applied as a matchMedia query that sets data-phone on the root
    element; touch mode sets data-touch. */
 :root {
   --desk-title-bar-height: 36px;

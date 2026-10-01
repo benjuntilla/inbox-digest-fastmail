@@ -347,7 +347,7 @@ the foot of the screen (`views/Toast.ts`) rather than a browser alert.
 
 ### The phone layout
 
-A viewport whose shorter side is under 700px gets the phone layout
+A phone-sized viewport (at most 500px one way and 1000px the other) gets the phone layout
 (`frontend/src/views/phone/`, `docs/system/blueprint/desktop-interface/plan-phone-interface.md`)
 over the same store: a bar of home, a pill naming what is on screen, and plus; a
 home grid of the apps on the first desktop's wallpaper; a windows sheet listing

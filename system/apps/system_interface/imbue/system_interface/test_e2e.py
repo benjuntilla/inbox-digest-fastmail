@@ -1926,6 +1926,29 @@ def _shown_history(base_url: str, client_id: str) -> list[str]:
 
 
 @pytest.mark.timeout(120, func_only=False)
+def test_only_a_phone_sized_viewport_gets_the_phone_layout(e2e_server: E2EServer, page: Page) -> None:
+    """Phones either way round get the phone layout; a tablet, the Studio's smallest window, and a desktop window
+    that is short but wide keep the desktop. The layout follows the viewport live, without a reload."""
+    _land(page, e2e_server)
+    sizes_and_phone = [
+        ((393, 852), True),
+        ((852, 393), True),
+        ((440, 956), True),
+        ((956, 440), True),
+        ((800, 562), False),
+        ((1255, 561), False),
+        ((1200, 480), False),
+        ((744, 1133), False),
+    ]
+    for (width, height), is_phone in sizes_and_phone:
+        page.set_viewport_size({"width": width, "height": height})
+        if is_phone:
+            expect(page.locator("html"), f"{width}x{height}").to_have_attribute("data-phone", "")
+        else:
+            expect(page.locator("html"), f"{width}x{height}").not_to_have_attribute("data-phone", "")
+
+
+@pytest.mark.timeout(120, func_only=False)
 @pytest.mark.parametrize("viewport", [{"width": 393, "height": 852}, {"width": 852, "height": 393}])
 def test_a_phone_in_either_orientation_lands_on_the_pinned_window(
     tmp_path: Path, page: Page, viewport: dict[str, int]

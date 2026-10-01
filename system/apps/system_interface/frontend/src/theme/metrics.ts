@@ -7,11 +7,15 @@
  * other direction, a TypeScript constant applied as a media query that sets ``data-phone``.
  */
 
-/** The viewport side under which the shell renders its phone layout (plan-phone-interface.md): the shorter side,
- *  so rotating a phone keeps the layout and no tablet gets it. */
-export const PHONE_MAX_SIDE_PX = 700;
+/** The viewport the shell renders its phone layout in (plan-phone-interface.md), whichever way round: a short side
+ *  at most PHONE_MAX_SHORT_SIDE_PX and a long side at most PHONE_MAX_LONG_SIDE_PX. Rotating a phone keeps the layout;
+ *  no tablet gets it, and neither does a desktop window that is short but wide. */
+export const PHONE_MAX_SHORT_SIDE_PX = 500;
+export const PHONE_MAX_LONG_SIDE_PX = 1000;
 
-export const PHONE_MEDIA_QUERY = `(max-width: ${PHONE_MAX_SIDE_PX}px), (max-height: ${PHONE_MAX_SIDE_PX}px)`;
+export const PHONE_MEDIA_QUERY =
+  `(max-width: ${PHONE_MAX_SHORT_SIDE_PX}px) and (max-height: ${PHONE_MAX_LONG_SIDE_PX}px), ` +
+  `(max-height: ${PHONE_MAX_SHORT_SIDE_PX}px) and (max-width: ${PHONE_MAX_LONG_SIDE_PX}px)`;
 export const TOUCH_MEDIA_QUERY = "(pointer: coarse)";
 
 export const PHONE_ATTRIBUTE = "data-phone";

@@ -194,9 +194,14 @@ def test_the_strip_shows_only_on_a_phone_sized_touch_page_that_frames_a_terminal
     assert frame_box["y"] + frame_box["height"] == pytest.approx(strip_box["y"])
     assert strip_box["y"] + strip_box["height"] == pytest.approx(viewport["height"])
 
-    # A phone on its side is still a phone, and a touch page short but wider than any phone is not, as in the
-    # shell's own layout.
+    # A phone on its side is still a phone; a touch page with either side longer than a phone's (the Studio's
+    # smallest window, or one short but wide) is not, as in the shell's own layout. Each size flips the strip, so every
+    # assertion waits on the change rather than passing on the state the previous size left.
     page.set_viewport_size({"width": 852, "height": 393})
+    expect(strip).to_be_visible()
+    page.set_viewport_size({"width": 800, "height": 562})
+    expect(strip).to_be_hidden()
+    page.set_viewport_size({"width": 956, "height": 440})
     expect(strip).to_be_visible()
     page.set_viewport_size({"width": 1200, "height": 480})
     expect(strip).to_be_hidden()

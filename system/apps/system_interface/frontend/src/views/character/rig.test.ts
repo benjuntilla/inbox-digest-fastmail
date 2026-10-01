@@ -228,6 +228,20 @@ describe("the shadow on the floor", () => {
     expect(highest.weight).toBeLessThan(lowest.weight);
   });
 
+  it("ignores a hover's shift, which nudges the body without lifting it", () => {
+    const below = still();
+    const above = still();
+    const rest = still().frame().shadow;
+    below.shy(Math.PI / 2, 0, 0, -8);
+    above.shy(-Math.PI / 2, 0, 0, 8);
+    run(below, 1);
+    run(above, 1);
+    expect(below.frame().shadow.weight).toBeCloseTo(rest.weight, 3);
+    expect(below.frame().shadow.spread).toBeCloseTo(rest.spread, 3);
+    expect(above.frame().shadow.weight).toBeCloseTo(rest.weight, 3);
+    expect(above.frame().shadow.spread).toBeCloseTo(rest.spread, 3);
+  });
+
   it("widens with the body, so a squash spreads the pool", () => {
     const rig = still();
     const rest = rig.frame().shadow.spread;

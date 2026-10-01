@@ -572,8 +572,9 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     const ty = float - hopY * config.radius + shiftY.value;
     const deg = (tiltS.value * 180) / Math.PI;
     // Height above the resting spot, in radii: the hop arc and the float, which
-    // is everything the floor cares about.
-    const lift = -ty / config.radius;
+    // is everything the floor cares about. A hover's shift is not: it nudges
+    // the body, it does not lift it.
+    const lift = hopY - float / config.radius;
 
     return {
       d: pathFromAnchors(anchors),

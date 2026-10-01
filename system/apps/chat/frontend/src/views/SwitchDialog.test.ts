@@ -93,6 +93,7 @@ import {
   beginSwitchToAccountId,
   closeSwitchDialog,
   openSwitchDialog,
+  takeBackSwitch,
 } from "./SwitchDialog";
 
 const OWN = { id: "acct-anthropic", harness: "claude", lane: "anthropic", label: "Anthropic (Claude Code)" };
@@ -139,6 +140,13 @@ function choose(selectClass: string, value: string): void {
   render();
 }
 
+/** Leave the transcript unloaded, with a load in flight that lands ``events``. */
+function loadInFlightLanding(events: unknown[]): void {
+  state.isTranscriptLoaded = false;
+  state.events = [];
+  state.loadLands = events;
+}
+
 function pressButton(label: string): void {
   const button = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label);
   if (button === undefined) throw new Error(`no button labelled ${label}`);
@@ -180,9 +188,7 @@ describe("the switch dialog", () => {
   it("waits out a load in flight on a new chat, and switches it at once when it has no user turn", async () => {
     // A new chat's page asks for its transcript again once the chat app lists it; a press right
     // after lands before that load does. Nothing may be armed: there is nothing to hand over.
-    state.isTranscriptLoaded = false;
-    state.events = [];
-    state.loadLands = [WELCOME];
+    loadInFlightLanding([WELCOME]);
     beginSwitchTo("agent-1", CODEX as ProviderAccount);
     await flush();
     expect(state.switches).toEqual([["agent-1", "acct-openai", "", "m-1"]]);
@@ -191,10 +197,28 @@ describe("the switch dialog", () => {
     expect(getPendingAccountId("agent-1")).toBeNull();
   });
 
+  it("decides only the latest of the presses made while a load is in flight", async () => {
+    loadInFlightLanding([WELCOME]);
+    beginSwitchTo("agent-1", CODEX as ProviderAccount);
+    beginSwitchTo("agent-1", OTHER_CLAUDE as ProviderAccount);
+    await flush();
+    expect(state.switches).toEqual([["agent-1", "acct-anthropic-2", "", "m-1"]]);
+    expect(state.notices).toEqual([]);
+  });
+
+  it("drops a press made while a load is in flight once the choice is taken back", async () => {
+    loadInFlightLanding([WELCOME]);
+    beginSwitchTo("agent-1", CODEX as ProviderAccount);
+    takeBackSwitch("agent-1");
+    await flush();
+    expect(state.switches).toEqual([]);
+    render();
+    expect(ROOT().textContent).toBe("");
+    expect(getPendingAccountId("agent-1")).toBeNull();
+  });
+
   it("waits out a load in flight, and asks when the chat turns out to have a user turn", async () => {
-    state.isTranscriptLoaded = false;
-    state.events = [];
-    state.loadLands = [WELCOME, TYPED];
+    loadInFlightLanding([WELCOME, TYPED]);
     beginSwitchTo("agent-1", CODEX as ProviderAccount);
     await flush();
     expect(state.switches).toEqual([]);

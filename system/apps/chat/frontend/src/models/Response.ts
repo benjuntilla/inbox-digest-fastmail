@@ -589,9 +589,8 @@ const loadStateByChat = new Map<string, TranscriptLoadState>();
 let loadAttemptCounter = 0;
 const newestLoadAttemptByChat = new Map<string, number>();
 
-// The newest snapshot attempt itself, settled only once its outcome is recorded, for a caller
-// that must act on what the transcript holds rather than on an empty window that has not loaded.
-const newestLoadByChat = new Map<string, Promise<TranscriptEvent[]>>();
+// When the newest snapshot attempt settles, once its outcome is recorded; never rejects.
+const newestLoadByChat = new Map<string, Promise<void>>();
 
 /** Whether this attempt is still the chat's newest, i.e. whether its outcome still counts. */
 function isNewestLoadAttempt(chatId: string, attempt: number): boolean {
@@ -775,19 +774,25 @@ function placeWindow(chatId: string, result: EventsResponse): void {
 
 export function fetchEvents(chatId: string): Promise<TranscriptEvent[]> {
   const load = loadSnapshot(chatId);
-  newestLoadByChat.set(chatId, load);
+  newestLoadByChat.set(
+    chatId,
+    load.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
   return load;
 }
 
 /** Wait out the chat's transcript snapshot loads, including any a newer attempt starts meanwhile:
  *  true once one has landed, false when the newest failed or none was ever made. */
 export async function whenTranscriptLoadSettles(chatId: string): Promise<boolean> {
-  let awaited: Promise<TranscriptEvent[]> | undefined;
+  let awaited: Promise<void> | undefined;
   while (!isTranscriptLoaded(chatId)) {
     const newest = newestLoadByChat.get(chatId);
     if (newest === undefined || newest === awaited) return false;
     awaited = newest;
-    await newest.catch(() => undefined);
+    await newest;
   }
   return true;
 }

@@ -63,6 +63,9 @@ interface OpenDialog {
 
 let open: OpenDialog | null = null;
 
+// The account pressed for each chat whose transcript load the press is waiting out.
+const pressWaitingOnLoadByChat = new Map<string, ProviderAccount>();
+
 /**
  * Switch ``chatId`` to ``target``, arm the switch, or ask first; nothing, when the chat is not in
  * the chat list yet or ``target`` is the account it already runs on (a re-authenticated one, say).
@@ -77,10 +80,27 @@ export function beginSwitchTo(chatId: string, target: ProviderAccount): void {
   // once it does, so a press right after the chat comes up can land before that load: wait it out
   // rather than read the not-yet-loaded window.
   if (isTranscriptLoaded(chatId)) {
+    pressWaitingOnLoadByChat.delete(chatId);
     decideSwitchTo(chatId, target);
     return;
   }
-  void whenTranscriptLoadSettles(chatId).then(() => decideSwitchTo(chatId, target));
+  // Only the latest press made during the wait is decided: the menu closes on a press and nothing
+  // shows until the load lands, so a second press is the user's newer choice, not another switch.
+  const isAlreadyWaiting = pressWaitingOnLoadByChat.has(chatId);
+  pressWaitingOnLoadByChat.set(chatId, target);
+  if (isAlreadyWaiting) return;
+  void whenTranscriptLoadSettles(chatId).then(() => {
+    const latest = pressWaitingOnLoadByChat.get(chatId);
+    pressWaitingOnLoadByChat.delete(chatId);
+    if (latest !== undefined) decideSwitchTo(chatId, latest);
+  });
+}
+
+/** Take back what ``chatId`` was about to switch to: the armed switch, and a press still waiting
+ *  out the transcript load. */
+export function takeBackSwitch(chatId: string): void {
+  pressWaitingOnLoadByChat.delete(chatId);
+  setPendingAccount(chatId, null);
 }
 
 function decideSwitchTo(chatId: string, target: ProviderAccount): void {

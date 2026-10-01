@@ -125,7 +125,8 @@ vi.mock("../shell", () => ({
 // armed card's Model row reopens it. Both recorded by account id.
 const begun: string[] = [];
 const reopened: string[] = [];
-vi.mock("./SwitchDialog", () => ({
+vi.mock("./SwitchDialog", async (importOriginal) => ({
+  takeBackSwitch: (await importOriginal<typeof import("./SwitchDialog")>()).takeBackSwitch,
   beginSwitchTo: (_chatId: string, account: { id: string }) => begun.push(account.id),
   openSwitchDialog: (_chatId: string, account: { id: string }) => reopened.push(account.id),
 }));
@@ -719,7 +720,7 @@ describe("the combo card", () => {
       setPendingAccount("a1", "acct-2");
       agentState.agent = chatSnapshotFixture("a1", {
         active_agent: { harness: "claude", account_id: "acct-1" },
-        handoff: handoffStateFixture({ phase: "summarizing" }),
+        handoff: handoffStateFixture({ phase: "summarizing", target_account_id: "acct-2" }),
       });
       render();
       // No pick: the harness has not said what its default is yet, so the chip names the harness.
@@ -744,6 +745,15 @@ describe("the combo card", () => {
       click(".model-selector-trigger");
       click('[data-menu-row="providers"]');
       expect(document.querySelector('[data-menu-part="submenu"]')?.textContent).not.toContain("next");
+
+      // Unmarked, its row is an ordinary one: pressing it begins a switch, not a silent take-back.
+      const failedRow = [...document.querySelectorAll('[data-menu-part="submenu"] button')].find((b) =>
+        (b.textContent ?? "").includes("OpenAI"),
+      );
+      if (failedRow === undefined) throw new Error("no row for the failed switch's account");
+      failedRow.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(begun).toEqual(["acct-2"]);
+      expect(getPendingAccountId("a1")).toBe("acct-2");
     });
   });
 

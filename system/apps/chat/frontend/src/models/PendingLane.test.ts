@@ -135,6 +135,13 @@ describe("the pending lane", () => {
     expect(nextSendSwitchTarget("agent-1")).toBeNull();
     expect(underwaySwitchTarget("agent-1")?.id).toBe("acct-openai");
 
+    // One another page started, to another account, is not this page's to name.
+    state.chat = chatSnapshotFixture("agent-1", {
+      active_agent: { harness: "claude", account_id: "acct-anthropic" },
+      handoff: rebindStateFixture(),
+    });
+    expect(underwaySwitchTarget("agent-1")).toBeNull();
+
     // A failed one is neither: its notice governs, and the next send is an ordinary one.
     state.chat = chatSnapshotFixture("agent-1", {
       active_agent: { harness: "claude", account_id: "acct-anthropic" },

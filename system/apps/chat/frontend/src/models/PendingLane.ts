@@ -81,8 +81,10 @@ export function switchKind(chat: ChatSnapshot, account: ProviderAccount): Transi
 }
 
 /**
- * The account the chat's next send switches it to, or null when the next send is an ordinary
- * one: nothing is pending, the pending account is gone, or it is not a switch target.
+ * The account chosen for the chat, while it is still a switch target: null when nothing is
+ * chosen, the account is gone, or the chat already runs on it. Whether the next send is what
+ * carries it out is ``nextSendSwitchTarget``'s question, and whether it is underway
+ * ``underwaySwitchTarget``'s.
  */
 export function pendingSwitchTarget(chatId: string): ProviderAccount | null {
   const account = accountForAgent(getPendingAccountId(chatId) ?? undefined);
@@ -103,9 +105,8 @@ export function isSwitchSending(chatId: string): boolean {
 
 /**
  * The account the chat's next send switches it to, or null when the next send is an ordinary one.
- * The one reading behind everything that says "next": the composer's strip and its "Switch and
- * send" button, and the model bar's "next" mark. A choice being sent or carried out is not next
- * any more, and a failed switch leaves the next send an ordinary one: its notice governs.
+ * A choice being sent or carried out is not next any more, and a failed switch leaves the next
+ * send an ordinary one: its notice governs.
  */
 export function nextSendSwitchTarget(chatId: string): ProviderAccount | null {
   const chat = getChatById(chatId);
@@ -117,8 +118,12 @@ export function nextSendSwitchTarget(chatId: string): ProviderAccount | null {
  *  out; null when no such switch is underway. */
 export function underwaySwitchTarget(chatId: string): ProviderAccount | null {
   const chat = getChatById(chatId);
-  if (chat === undefined || !(isSwitchSending(chatId) || isSwitchUnderway(chat))) return null;
-  return pendingSwitchTarget(chatId);
+  if (chat === undefined) return null;
+  // A switch another page or a script started is not this page's to name.
+  const isCarryingThisChoice = isSwitchUnderway(chat)
+    ? chat.handoff?.target_account_id === getPendingAccountId(chatId)
+    : isSwitchSending(chatId);
+  return isCarryingThisChoice ? pendingSwitchTarget(chatId) : null;
 }
 
 /** Whether a switch is still being carried out, so the choice it is carrying is not spent yet. A

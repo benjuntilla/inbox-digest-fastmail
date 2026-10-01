@@ -13,9 +13,9 @@
  * The provider row is the one that always renders. A provider is a property of the ACCOUNT,
  * not of the model, so it survives all three of the states in which there is no model to show.
  * While a switch is armed, or being carried out, the menu describes the TARGET instead, since
- * that is what the chat's messages run on. A chat with no agent yet (awaiting its first send, or being created) has no
- * menu: the chip names the account the chat starts on, and with no provider signed in at all it
- * says so and opens the provider chooser.
+ * that is what the chat's messages run on. A chat with no agent yet (awaiting its first send, or
+ * being created) has no menu: the chip names the account the chat starts on, and with no
+ * provider signed in at all it says so and opens the provider chooser.
  *
  * How the menu opens, closes and grows its submenus is the workspace `Menu`'s
  * (`components/menu`), not this file's. What this file owns is the rows and the data behind
@@ -48,11 +48,9 @@ import { chooseFastMode } from "./fast-mode-limit";
 import { changedAxes, effectiveChoice, setModelChoice } from "../models/ModelSettings";
 import type { ModelIdentity } from "../models/ModelSettings";
 import {
-  getPendingAccountId,
   getPendingPick,
   isSwitchTarget,
   nextSendSwitchTarget,
-  setPendingAccount,
   switchKind,
   underwaySwitchTarget,
 } from "../models/PendingLane";
@@ -64,7 +62,7 @@ import {
   getDefaultAccountId,
   openProviderChooser,
 } from "../models/Providers";
-import { beginSwitchTo, beginSwitchToAccountId, openSwitchDialog } from "./SwitchDialog";
+import { beginSwitchTo, beginSwitchToAccountId, openSwitchDialog, takeBackSwitch } from "./SwitchDialog";
 import type { ProviderAccount } from "../models/Providers";
 import { hoverTooltipAttrs } from "@imbue/workspace-ui/src/components/hoverTooltip";
 import { icon } from "@imbue/workspace-ui/src/components/icons";
@@ -584,7 +582,6 @@ export function ModelProviderMenu(): m.Component<{ chatId: string }> {
   function providerSubmenu(chatId: string, current: ProviderAccount | null): m.Children {
     const rows = getAccounts();
     const defaultId = getDefaultAccountId();
-    const pendingId = getPendingAccountId(chatId);
     const nextId = nextSendSwitchTarget(chatId)?.id ?? null;
     const chat = getChatById(chatId);
     return [
@@ -597,17 +594,17 @@ export function ModelProviderMenu(): m.Component<{ chatId: string }> {
           ? [m("div", { class: css.SUBMENU_EMPTY }, "No providers yet.")]
           : rows.map((row) => {
               const isCurrent = current !== null && row.id === current.id;
-              const isPending = row.id === pendingId;
+              const isNext = row.id === nextId;
               return accountRow({
                 row,
                 isCurrent,
                 isDefault: row.id === defaultId,
                 rowClass: isCurrent ? css.ACCOUNT_ROW_SELECTED : css.ACCOUNT_ROW,
-                ...(row.id === nextId ? { badge: "next" } : {}),
+                ...(isNext ? { badge: "next" } : {}),
                 onSelect: () => {
-                  if (isCurrent || isPending || chat === undefined || !isSwitchTarget(chat, row)) {
+                  if (isCurrent || isNext || chat === undefined || !isSwitchTarget(chat, row)) {
                     menu.closeSubmenu();
-                    setPendingAccount(chatId, null);
+                    takeBackSwitch(chatId);
                     return;
                   }
                   menu.close();
@@ -775,6 +772,7 @@ export function ModelProviderMenu(): m.Component<{ chatId: string }> {
       const pendingPick = getPendingPick(chatId);
       const isPendingRebind = pending !== null && switchKind(chat, pending) === "rebind";
       const pendingModelLabel = pendingPick?.label ?? (isPendingRebind ? (matched?.label ?? null) : null);
+      const pendingModelValue = pendingModelLabel ?? (isPendingRebind ? "Current model" : "Default model");
       // A page with no switch of its own can still be watching one: reloaded mid-switch, it has
       // only what the chat carries. Read the same way, so the chip does not fall back to a live
       // choice that cannot name the picked model until the harness has taken it.
@@ -840,7 +838,7 @@ export function ModelProviderMenu(): m.Component<{ chatId: string }> {
           render: () =>
             pickerRow({
               label: "Model",
-              value: pendingModelLabel ?? (isPendingRebind ? "Current model" : "Default model"),
+              value: pendingModelValue,
               tooltip: "Change the model this chat switches to",
               onOpen: () => openSwitchDialog(chatId, armed),
             }),
@@ -860,7 +858,7 @@ export function ModelProviderMenu(): m.Component<{ chatId: string }> {
           kind: "value",
           key: "model",
           label: "Model",
-          value: pendingModelLabel ?? (isPendingRebind ? "Current model" : "Default model"),
+          value: pendingModelValue,
           truncateValue: "start",
         });
       } else {

@@ -189,8 +189,8 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
             pressedPointer = event.pointerId;
             press(rig, angleOf(event, event.currentTarget as SVGSVGElement));
           },
-          // Set once, on the way in: a body that tracked the pointer across itself would read as
-          // squirming rather than shying.
+          // Set once, on the way in, and held until the pointer leaves: tracking it across the body
+          // reads as squirming.
           onpointerenter: (event: PointerEvent) => hoverWith(event, interactive),
           // Up, cancel, and leave all end the press. Leaving counts because
           // nothing captures the pointer, so a release off the element never

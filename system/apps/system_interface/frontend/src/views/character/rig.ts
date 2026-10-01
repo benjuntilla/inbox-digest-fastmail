@@ -2,7 +2,7 @@
  * The blob rig: every way the character can move, as springs you poke.
  *
  * The rig is plain TypeScript with no framework in it -- construct one, call
- * `step(dt)` each frame, read `frame()`. Seven independent channels:
+ * `step(dt)` each frame, read `frame()`. The channels, each independent:
  *
  *   surface   the modal wobble (see blobPath.ts) -- six springs that ring
  *   body      squash & stretch, one spring, area-preserving
@@ -224,7 +224,7 @@ const BUSY_DENT_GAP: readonly [number, number] = [0.12, 0.45];
  * floor is that launch, apex and landing stay three distinguishable shapes --
  * the airborne stretch is read straight off the velocity and so never lags, and
  * the landing runs on the impact channel, which answers in about a tenth of a
- * second. The body spring, which is the slow one, the jump does not go through.
+ * second.
  */
 const GRAVITY = 34;
 
@@ -251,8 +251,8 @@ const HOP_APEX_SQUASH = 0.07;
 /**
  * The shy channel's springs: the dent and the shift a hovering pointer holds.
  *
- * Damped well past the place springs, since these follow a pointer rather than
- * answer a blow -- a hover that rang would read as the character flinching.
+ * Damped well past the surface and tilt springs, since these follow a pointer
+ * rather than answer a blow: a hover that rang would read as a flinch.
  */
 const SHY_STIFFNESS = 120;
 const SHY_RATIO = 0.8;
@@ -553,13 +553,12 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     const breath = 1 + 0.018 * idle * Math.sin((clock * Math.PI * 2) / 3.4);
     // Airborne shape comes from speed, not from scheduled cues: fastest at
     // launch and at touchdown, zero at the apex, where the small residual
-    // squash is all that is left. Anything keyframed against the arc would
-    // arrive late through the body spring.
+    // squash is all that is left.
     const airborne = hopY > 0 || hopV !== 0;
     const hopShape = airborne ? HOP_STRETCH * Math.min(1, Math.abs(hopV) / HOP_REF_SPEED) - HOP_APEX_SQUASH : 0;
-    // Three squash sources compose: the held pose, the arc, and any impact. The
+    // The squash sources compose: the held pose, the arc, and any impact. The
     // stops apply to the product, since it is the rendered shape that must not
-    // turn into a needle, not any one contribution.
+    // turn into a needle.
     const stacked = body.value * (1 + hopShape) * (1 + impact.value);
     const sy = Math.max(SQUASH_LIMIT[0], Math.min(SQUASH_LIMIT[1], stacked));
     const sx = sy ** -config.bulge;

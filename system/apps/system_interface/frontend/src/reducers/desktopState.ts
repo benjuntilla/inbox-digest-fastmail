@@ -180,7 +180,7 @@ export type DesktopEvent =
       readonly type: "avatar_selection_updated";
       readonly design: string;
       readonly defaultDesign: string | null;
-      /** When the shell pushed it; null for the read at start, which is not a switch. */
+      /** When the shell pushed it; null for the read at start. */
       readonly pushedAt: number | null;
     }
   /** The ``update_notice_changed`` the shell pushed (and its seed on connect); null once the record is cleared. */

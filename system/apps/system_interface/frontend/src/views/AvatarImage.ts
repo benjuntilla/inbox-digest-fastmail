@@ -33,10 +33,9 @@ export interface AvatarImageAttrs {
 /**
  * How soon after a switch a character that mounts counts as the one just chosen, in ms.
  *
- * The switch is what mounts it -- the `<img>` gives way to the rig on the next redraw -- so anything
- * close to a frame would do; the slack is for a busy page. The bound is what keeps the jump to the
- * switch: the character also mounts on every load and whenever its entry is re-rendered elsewhere,
- * and neither of those is it turning up.
+ * The switch mounts it on the next redraw, so the slack is only for a busy page. The bound keeps the
+ * jump to the switch: the character also mounts on every load and whenever its entry is drawn
+ * somewhere else.
  */
 const ARRIVAL_WINDOW_MS = 1000;
 

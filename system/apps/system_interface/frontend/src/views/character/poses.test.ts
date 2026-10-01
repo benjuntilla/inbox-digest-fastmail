@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMood, ATTENDING_TILT, jump, posture, press, REST_TILT } from "./poses";
+import { applyMood, ATTENDING_TILT, hover, jump, posture, press, REST_TILT, unhover } from "./poses";
 import { type BlobRig, createBlobRig } from "./rig";
 
 const STEP = 1 / 60;
@@ -210,5 +210,82 @@ describe("the arrival jump", () => {
     rig.settle();
     const rows = trace(rig, 1.5);
     expect(Math.max(...rows.map((r) => r.up))).toBeLessThan(1);
+  });
+});
+
+describe("a hover", () => {
+  /** Where the frame's transform puts the body, in user units. */
+  function placeOf(rig: BlobRig): { x: number; y: number } {
+    const match = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(rig.frame().transform);
+    return { x: Number(match?.[1] ?? 0), y: Number(match?.[2] ?? 0) };
+  }
+
+  /** Ambient motion off, so the transform carries only the hover. */
+  function still(): BlobRig {
+    return createBlobRig({ radius: 100, idle: 0 });
+  }
+
+  function run(rig: BlobRig, frames: number): void {
+    for (let i = 0; i < frames; i++) rig.step(STEP);
+  }
+
+  it("shifts the body a couple of pixels away from the pointer", () => {
+    const rig = still();
+    // A pointer on the right, drawn at 3 units to the pixel: 2px is 6 units, leftward.
+    hover(rig, 0, 3);
+    run(rig, 120);
+    expect(placeOf(rig).x).toBeCloseTo(-6, 1);
+    expect(placeOf(rig).y).toBeCloseTo(0, 1);
+
+    // From above, it moves down.
+    hover(rig, -Math.PI / 2, 3);
+    run(rig, 120);
+    expect(placeOf(rig).x).toBeCloseTo(0, 1);
+    expect(placeOf(rig).y).toBeCloseTo(6, 1);
+  });
+
+  it("dents the side the pointer is on, slightly", () => {
+    const hovered = still();
+    const untouched = still();
+    hover(hovered, 0, 0);
+    run(hovered, 120);
+    run(untouched, 120);
+    // The rightmost anchor sits at angle 0; it comes in, but by a few percent at most.
+    const right = (rig: BlobRig) => Math.max(...rig.frame().anchors.map((a) => a.x));
+    expect(right(hovered)).toBeLessThan(right(untouched));
+    expect(right(hovered)).toBeGreaterThan(right(untouched) * 0.9);
+  });
+
+  it("settles back when the pointer leaves", () => {
+    const rig = still();
+    const rest = still();
+    run(rest, 240);
+    hover(rig, 0, 3);
+    run(rig, 120);
+    unhover(rig);
+    run(rig, 120);
+    expect(placeOf(rig).x).toBeCloseTo(0, 1);
+    expect(rig.frame().d).toEqual(rest.frame().d);
+  });
+
+  it("keeps the dent under the pointer while the body leans", () => {
+    // A pointer straight above a body tilted 30 degrees clockwise. The dent is
+    // pressed in screen space, so in the body's own frame it lands at -120 degrees.
+    const rig = still();
+    rig.tilt(Math.PI / 6);
+    run(rig, 240);
+    const target = (-120 * Math.PI) / 180;
+    const radiusNear = (): number => {
+      const nearest = rig
+        .frame()
+        .anchors.reduce((best, a) =>
+          Math.abs(Math.atan2(a.y, a.x) - target) < Math.abs(Math.atan2(best.y, best.x) - target) ? a : best,
+        );
+      return Math.hypot(nearest.x, nearest.y);
+    };
+    const before = radiusNear();
+    hover(rig, -Math.PI / 2, 0);
+    run(rig, 120);
+    expect(radiusNear()).toBeLessThan(before);
   });
 });

@@ -80,6 +80,28 @@ export function releasePress(rig: BlobRig): void {
   rig.release();
 }
 
+/** How deep a hover dents, in radii -- under the working dents, so it reads as a flinch and not a blow. */
+const HOVER_DENT_DEPTH = 0.05;
+/** How far a hover shifts the body away from the pointer, in screen pixels whatever size it is drawn at. */
+const HOVER_SHIFT_PX = 2;
+
+/**
+ * Lean away from a pointer resting at `angle` (radians from the centre, as
+ * `press`): a slight dent where it is and the body a couple of pixels the other
+ * way. `unitsPerPx` is the character's drawing scale, so the shift stays a
+ * couple of pixels in a small entry and a large one alike. Called again as the
+ * pointer moves; `unhover` lets go.
+ */
+export function hover(rig: BlobRig, angle: number, unitsPerPx: number): void {
+  const away = HOVER_SHIFT_PX * unitsPerPx;
+  rig.shy(angle, HOVER_DENT_DEPTH, -away * Math.cos(angle), -away * Math.sin(angle));
+}
+
+/** The pointer has gone; settle back. */
+export function unhover(rig: BlobRig): void {
+  rig.unshy();
+}
+
 /** Peak height of the arrival jump, in radii. */
 const JUMP_HEIGHT = 0.95;
 /** Crouch before launching, and the beat before pushing off. */

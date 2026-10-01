@@ -2,13 +2,14 @@
  * The blob rig: every way the character can move, as springs you poke.
  *
  * The rig is plain TypeScript with no framework in it -- construct one, call
- * `step(dt)` each frame, read `frame()`. Five independent channels:
+ * `step(dt)` each frame, read `frame()`. Seven independent channels:
  *
  *   surface   the modal wobble (see blobPath.ts) -- six springs that ring
  *   body      squash & stretch, one spring, area-preserving
  *   impact    a second, much faster squash, for blows and landings
  *   tilt      the lean, which is the whole of the character's posture
  *   hop       height off the floor, under gravity rather than a spring
+ *   shy       a held dent and a held shift, for a pointer resting on it
  *
  * Every channel takes the same two kinds of input, which is the whole API:
  *
@@ -247,6 +248,15 @@ const HOP_STRETCH = 0.3;
 /** ...and the small compression left at the apex, where the speed is zero. */
 const HOP_APEX_SQUASH = 0.07;
 
+/**
+ * The shy channel's springs: the dent and the shift a hovering pointer holds.
+ *
+ * Damped well past the place springs, since these follow a pointer rather than
+ * answer a blow -- a hover that rang would read as the character flinching.
+ */
+const SHY_STIFFNESS = 120;
+const SHY_RATIO = 0.8;
+
 /** Peak surface displacement, in radii, for a force-1 poke. */
 const POKE_DEPTH = 0.17;
 /** Hard stops on the squash spring, as a fraction of rest height. */
@@ -292,6 +302,14 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
   const body = makeSpring(1, config.bodyStiffness, config.bodyRatio);
   const tiltS = makeSpring(0, config.tiltStiffness, config.tiltRatio);
   const impact = makeSpring(0, IMPACT_STIFFNESS, IMPACT_RATIO);
+  // The shy dent's depth, and where it is pressed in screen space -- the frame
+  // takes the tilt back off, so the dent stays under the pointer as the body
+  // leans. Not on the surface springs: those are the working dents' and the
+  // pokes', and a hover has to sit on top of both rather than replace them.
+  const shyDepth = makeSpring(0, SHY_STIFFNESS, SHY_RATIO);
+  let shyAngle = 0;
+  const shiftX = makeSpring(0, SHY_STIFFNESS, SHY_RATIO);
+  const shiftY = makeSpring(0, SHY_STIFFNESS, SHY_RATIO);
 
   let clock = 0;
 
@@ -386,6 +404,25 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     return (2 * hopV) / GRAVITY;
   }
 
+  /**
+   * Hold a dent `depth` radii deep at `angle` (radians, screen space, as
+   * `poke`), and the whole body `dx`, `dy` user units off its spot. Asking again
+   * moves both; `unshy` lets them go.
+   */
+  function shy(angle: number, depth: number, dx: number, dy: number): void {
+    shyAngle = angle;
+    shyDepth.target = depth;
+    shiftX.target = dx;
+    shiftY.target = dy;
+  }
+
+  /** Let the shy dent and shift go. */
+  function unshy(): void {
+    shyDepth.target = 0;
+    shiftX.target = 0;
+    shiftY.target = 0;
+  }
+
   /** Run `cue` `seconds` from now on the rig's own clock. */
   function after(seconds: number, cue: () => void): void {
     cues.push({ at: clock + seconds, run: cue });
@@ -401,6 +438,9 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     settleSpring(body, 1);
     settleSpring(tiltS, 0);
     settleSpring(impact, 0);
+    settleSpring(shyDepth, 0);
+    settleSpring(shiftX, 0);
+    settleSpring(shiftY, 0);
     hopY = 0;
     hopV = 0;
     cues = [];
@@ -438,6 +478,9 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
       }
       stepSpring(tiltS, SUBSTEP);
       stepSpring(impact, SUBSTEP);
+      stepSpring(shyDepth, SUBSTEP);
+      stepSpring(shiftX, SUBSTEP);
+      stepSpring(shiftY, SUBSTEP);
       if (hopV !== 0 || hopY > 0) {
         hopV -= GRAVITY * SUBSTEP;
         hopY += hopV * SUBSTEP;
@@ -498,6 +541,14 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
       };
     });
     for (const m of surface) modes.push({ k: m.k, cos: m.cos.value, sin: m.sin.value });
+    if (shyDepth.value > 1e-4) {
+      // The same falloff across the modes as `dent`, in the body's own frame.
+      const a = shyAngle - tiltS.value;
+      for (const k of config.modeNumbers) {
+        const share = shyDepth.value / (k - 1);
+        modes.push({ k, cos: -share * Math.cos(k * a), sin: -share * Math.sin(k * a) });
+      }
+    }
 
     const breath = 1 + 0.018 * idle * Math.sin((clock * Math.PI * 2) / 3.4);
     // Airborne shape comes from speed, not from scheduled cues: fastest at
@@ -518,7 +569,8 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     const anchors = blobAnchors({ rx, ry, points: config.points, modes, goo: config.goo });
 
     const float = 0.02 * config.radius * idle * Math.sin((clock * Math.PI * 2) / 4.7);
-    const ty = float - hopY * config.radius;
+    const tx = shiftX.value;
+    const ty = float - hopY * config.radius + shiftY.value;
     const deg = (tiltS.value * 180) / Math.PI;
     // Height above the resting spot, in radii: the hop arc and the float, which
     // is everything the floor cares about.
@@ -526,7 +578,7 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
 
     return {
       d: pathFromAnchors(anchors),
-      transform: `translate(0 ${ty.toFixed(2)}) rotate(${deg.toFixed(2)})`,
+      transform: `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) rotate(${deg.toFixed(2)})`,
       anchors,
       scale: [sx, sy],
       shadow: {
@@ -572,6 +624,8 @@ export function createBlobRig(overrides: Partial<BlobRigConfig> = {}) {
     pop,
     hop,
     after,
+    shy,
+    unshy,
     settle,
   };
 }

@@ -14,7 +14,7 @@
 
 import m from "mithril";
 import { type CharacterElements, driveCharacter, paintAtRest } from "./characterView";
-import { applyMood, type CharacterMood, jump, posture, press, releasePress } from "./poses";
+import { applyMood, type CharacterMood, hover, jump, posture, press, releasePress, unhover } from "./poses";
 import { type BlobRig, createBlobRig } from "./rig";
 import { CHARACTER_COLOR } from "./stillFrame";
 
@@ -118,6 +118,19 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
     return Math.atan2(y, x);
   }
 
+  /** Viewbox units per screen pixel at the size it is drawn. */
+  function unitsPerPx(root: SVGSVGElement): number {
+    const width = root.getBoundingClientRect().width;
+    return width === 0 ? 0 : (2 * R) / width;
+  }
+
+  /** A mouse resting on it, not a finger: touch has no hover, and on a tap this would only blur the press. */
+  function hoverWith(event: PointerEvent, interactive: boolean): void {
+    if (!interactive || reducedMotion.matches || event.pointerType !== "mouse") return;
+    const root = event.currentTarget as SVGSVGElement;
+    hover(rig, angleOf(event, root), unitsPerPx(root));
+  }
+
   function endPress(pointerId: number): void {
     if (pressedPointer !== pointerId) return;
     pressedPointer = null;
@@ -176,12 +189,17 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
             pressedPointer = event.pointerId;
             press(rig, angleOf(event, event.currentTarget as SVGSVGElement));
           },
+          onpointerenter: (event: PointerEvent) => hoverWith(event, interactive),
+          onpointermove: (event: PointerEvent) => hoverWith(event, interactive),
           // Up, cancel, and leave all end the press. Leaving counts because
           // nothing captures the pointer, so a release off the element never
           // arrives here and the body would stay squashed.
           onpointerup: (event: PointerEvent) => endPress(event.pointerId),
           onpointercancel: (event: PointerEvent) => endPress(event.pointerId),
-          onpointerleave: (event: PointerEvent) => endPress(event.pointerId),
+          onpointerleave: (event: PointerEvent) => {
+            endPress(event.pointerId);
+            unhover(rig);
+          },
         },
         [
           shadow

@@ -151,6 +151,51 @@ describe("being chosen", () => {
   });
 });
 
+describe("a mouse resting on it", () => {
+  /** Where the body is drawn, in viewBox units. */
+  function placeOf(root: HTMLElement): { x: number; y: number } {
+    const transform = root.querySelector("[data-character-body]")?.getAttribute("transform") ?? "";
+    const match = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(transform);
+    return { x: Number(match?.[1] ?? 0), y: Number(match?.[2] ?? 0) };
+  }
+
+  /** Mount it at 100px square, so a pixel is two viewBox units. */
+  function sized(): { root: HTMLElement; svg: SVGSVGElement } {
+    const root = render({ size: 100 });
+    const svg = root.querySelector("svg") as SVGSVGElement;
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect;
+    return { root, svg };
+  }
+
+  function pointer(svg: SVGSVGElement, type: string, pointerType: string, x: number, y: number): void {
+    svg.dispatchEvent(new window.PointerEvent(type, { pointerId: 1, pointerType, clientX: x, clientY: y }));
+  }
+
+  it("nudges the body away from it, and lets go when it leaves", async () => {
+    const { root, svg } = sized();
+    await runFrames(2);
+    const rest = placeOf(root).x;
+    // In from the right edge: the body moves left by about 2px, 4 units.
+    pointer(svg, "pointerenter", "mouse", 100, 50);
+    await runFrames(60);
+    expect(placeOf(root).x - rest).toBeLessThan(-3);
+    expect(placeOf(root).x - rest).toBeGreaterThan(-5);
+
+    pointer(svg, "pointerleave", "mouse", 100, 50);
+    await runFrames(60);
+    expect(Math.abs(placeOf(root).x - rest)).toBeLessThan(0.5);
+  });
+
+  it("is a mouse's alone: a finger does not hover", async () => {
+    const { root, svg } = sized();
+    await runFrames(2);
+    const rest = placeOf(root).x;
+    pointer(svg, "pointerenter", "touch", 100, 50);
+    await runFrames(60);
+    expect(Math.abs(placeOf(root).x - rest)).toBeLessThan(0.5);
+  });
+});
+
 describe("reduced motion", () => {
   it("draws the character but holds it still", async () => {
     setReducedMotion(true);

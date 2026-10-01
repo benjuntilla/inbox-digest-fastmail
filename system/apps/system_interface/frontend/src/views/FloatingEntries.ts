@@ -76,7 +76,9 @@ export const FloatingEntries: m.Component<FloatingEntriesAttrs> = {
               (!isAvatar && (entry.isMinimized || entry.isDetached) ? "opacity-70 " : "") +
               (isMenuOpen && !isAvatar ? "ring-2 ring-accent" : ""),
             style: rectStyle(rect),
-            ...hoverTooltipAttrs(tooltip),
+            // Above for the avatar: it floats just over the taskbar, and the shared flip only fires
+            // on viewport overflow, so the below placement would land the bubble on the bar.
+            ...hoverTooltipAttrs(tooltip, isAvatar ? "above" : "below"),
             onclick: () => attrs.onClick(entry.window.id),
             oncontextmenu: (event: MouseEvent) => {
               event.preventDefault();

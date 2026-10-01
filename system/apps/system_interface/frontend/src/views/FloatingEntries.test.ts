@@ -54,6 +54,8 @@ describe("FloatingEntries", () => {
     expect(entry.getAttribute("data-detached")).toBe("false");
     expect(entry.getAttribute("aria-pressed")).toBe("false");
     expect(entry.getAttribute("aria-label")).toBe("Buddy");
+    // A plain entry keeps the shared below placement; only the avatar's bubble goes above.
+    expect(entry.getAttribute("data-hover-tooltip-placement")).toBeNull();
     expect(entry.style.left).toBe("500px");
     expect(entry.style.top).toBe("400px");
     expect(entry.style.width).toBe("56px");
@@ -109,6 +111,9 @@ describe("FloatingEntries", () => {
     expect(entry.getAttribute("data-mood")).toBe("working");
     expect(entry.getAttribute("data-stale")).toBe("true");
     expect(entry.getAttribute("aria-label")).toBe("Buddy (status may be out of date)");
+    // Above, so the bubble lands on the backdrop rather than on the taskbar the entry floats over.
+    expect(entry.getAttribute("data-hover-tooltip")).toBe("Buddy (status may be out of date)");
+    expect(entry.getAttribute("data-hover-tooltip-placement")).toBe("above");
     expect(entry.querySelector("svg")).toBeNull();
     const image = entry.querySelector("img") as HTMLImageElement;
     expect(image.getAttribute("src")).toBe("/api/avatars/jelly-cat/image.svg?mood=working");

@@ -1200,9 +1200,12 @@ export function MessageInput(): m.Component<MessageInputAttrs> {
       // agent the chat is leaving, ahead of the switch.
       const isSendHeldForSwitch = isSwitchSending(chatId);
       // A chosen provider arms a switch, and the next send carries the chat to it, so the composer
-      // comes back as soon as one is armed.
+      // comes back as soon as one is armed, and stays while that switch is sent.
       const isBlockedBySignedOutAccount =
-        handoff === null && switchTarget === null && isAccountSignedOut(chat?.active_agent.account_id);
+        handoff === null &&
+        switchTarget === null &&
+        !isSendHeldForSwitch &&
+        isAccountSignedOut(chat?.active_agent.account_id);
 
       // The stop button is only meaningful while the agent has an interruptible
       // turn in progress -- the same condition that drives the activity indicator

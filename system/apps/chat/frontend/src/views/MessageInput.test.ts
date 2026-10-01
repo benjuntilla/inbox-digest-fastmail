@@ -1281,6 +1281,31 @@ describe("MessageInput on a chat whose account was signed out", () => {
     expect(renderedText(tree)).not.toContain("You signed out of the account this chat runs on.");
   });
 
+  it("keeps the composer while the switch away from it is being sent", async () => {
+    mocks.switching.target = { id: "account-chosen-5522", harness: "claude", label: "Claude" };
+    let answer: (value: { kind: string; phase: string; returned_block: string }) => void = () => undefined;
+    mocks.switchChat.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const component = MessageInput();
+    const render = () => component.view!({ attrs: { chatId: "agent-signed-out" } } as never);
+    const textarea = findByTag(render(), "textarea");
+    (textarea?.attrs?.oninput as (event: unknown) => void)({
+      target: { value: "Carry on in Claude", style: {}, scrollHeight: 10 },
+    });
+    (findByAttr(render(), "aria-label", "Switch and send")!.attrs!.onclick as () => void)();
+    await vi.waitFor(() => expect(mocks.switchChat).toHaveBeenCalledTimes(1));
+
+    const sending = render();
+    expect(findByTag(sending, "textarea")).toBeDefined();
+    expect(renderedText(sending)).not.toContain("You signed out of the account this chat runs on.");
+
+    answer({ kind: "handoff", phase: "summarizing", returned_block: "" });
+    await flushAsync();
+  });
+
   it("catches up with a sign-out made in another window when the send is refused for it", async () => {
     // This page's list still has the account, so the composer is there to send from.
     mocks.signedOutAccountIds.clear();

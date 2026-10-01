@@ -1930,14 +1930,16 @@ def test_only_a_phone_sized_viewport_gets_the_phone_layout(e2e_server: E2EServer
     """Phones either way round get the phone layout; a tablet, the Studio's smallest window, and a desktop window
     that is short but wide keep the desktop. The layout follows the viewport live, without a reload."""
     _land(page, e2e_server)
+    # Each size flips the layout, so every assertion waits for the media query's change rather than passing on the
+    # state the previous size left.
     sizes_and_phone = [
         ((393, 852), True),
-        ((852, 393), True),
-        ((440, 956), True),
-        ((956, 440), True),
         ((800, 562), False),
+        ((852, 393), True),
         ((1255, 561), False),
+        ((440, 956), True),
         ((1200, 480), False),
+        ((956, 440), True),
         ((744, 1133), False),
     ]
     for (width, height), is_phone in sizes_and_phone:

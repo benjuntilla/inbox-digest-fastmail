@@ -1966,7 +1966,7 @@ def test_a_phone_in_either_orientation_lands_on_the_pinned_window(
             expect(phone.locator("[data-taskbar]")).to_have_count(0)
             expect(phone.locator("[data-window-id] .title-bar")).to_have_count(0)
             _phone_shows(phone, pinned["id"])
-            expect(_phone_pill(phone).locator("[data-avatar-image]")).to_be_visible()
+            expect(_phone_pill(phone).locator("[data-character-body]")).to_be_visible()
             host = _box(phone.locator("[data-phone-page-host]"))
             _assert_same_box(_box(phone.locator(f'iframe[data-live-page="{pinned["id"]}"]')), host, "phone page")
             bar = _box(phone.locator("[data-phone-bar]"))

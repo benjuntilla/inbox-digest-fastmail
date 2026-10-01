@@ -24,13 +24,28 @@ export type CharacterMood = "idle" | "working";
 export const REST_TILT = 0.1;
 
 /**
- * Hold the character's posture.
+ * The lean while the user is here. Negative: the body's own long axis runs up
+ * and to the right, so at zero rotation it still reads as leaning, and
+ * standing it up means rotating back past zero against that diagonal.
+ *
+ * Tuned by eye against true vertical rather than derived -- the outline is too
+ * round for its principal axis to mean anything. It reads as standing from
+ * about -15; past roughly -25 it looks like a lean the other way, and the idle
+ * wander moves the outline a couple of degrees either side of wherever it sits.
+ */
+export const ATTENDING_TILT = (-20 * Math.PI) / 180;
+
+/**
+ * Hold the posture for whether the user is here: drawn up while they are, and
+ * slouched back when they leave. The whole of the response -- the user arrives
+ * by clicking the character, and a body that jumps out from under the pointer
+ * that just pressed it fights the press rather than answering it.
  *
  * Idempotent: the tilt is a spring target, so asking twice costs nothing, and
  * asking mid-motion lets the body travel to the new lean from wherever it is.
  */
-export function posture(rig: BlobRig): void {
-  rig.tilt(REST_TILT);
+export function posture(rig: BlobRig, isAttending: boolean): void {
+  rig.tilt(isAttending ? ATTENDING_TILT : REST_TILT);
 }
 
 /**
@@ -43,9 +58,9 @@ export function posture(rig: BlobRig): void {
  * running" -- it crosses at an instant the user has no reason to recognise. A
  * continuous state can be coarse and still read true; a gesture cannot.
  */
-export function applyMood(rig: BlobRig, mood: CharacterMood): void {
+export function applyMood(rig: BlobRig, mood: CharacterMood, isAttending: boolean): void {
   rig.configure({ busy: mood === "working" ? 1 : 0 });
-  posture(rig);
+  posture(rig, isAttending);
 }
 
 /**

@@ -92,6 +92,34 @@ describe("the character", () => {
   });
 });
 
+describe("the user arriving", () => {
+  /** The lean the frame's transform is holding, in degrees. */
+  function leanOf(root: HTMLElement): number {
+    const transform = root.querySelector("[data-character-body]")?.getAttribute("transform") ?? "";
+    const match = /rotate\((-?[\d.]+)/.exec(transform);
+    return match === null ? 0 : Number(match[1]);
+  }
+
+  it("draws the character up, and slouches it back when the user leaves", async () => {
+    let isAttending = false;
+    const root = mountView(() => m(ImbueCharacter, { size: 120, mood: "idle", isAttending }));
+    await runFrames(30);
+    const slouched = leanOf(root);
+    expect(slouched).toBeGreaterThan(0);
+
+    isAttending = true;
+    m.redraw.sync();
+    await runFrames(60);
+    const drawnUp = leanOf(root);
+    expect(drawnUp).toBeLessThan(slouched);
+
+    isAttending = false;
+    m.redraw.sync();
+    await runFrames(60);
+    expect(leanOf(root)).toBeGreaterThan(drawnUp);
+  });
+});
+
 describe("reduced motion", () => {
   it("draws the character but holds it still", async () => {
     setReducedMotion(true);

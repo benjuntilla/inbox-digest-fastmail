@@ -9,7 +9,7 @@
  *
  * Mithril renders this once. After that the rig's own loop owns the path and
  * the transforms, and a redraw only happens when something changes at human
- * speed: the mood, the size.
+ * speed: the mood, the size, whether the user is here.
  */
 
 import m from "mithril";
@@ -59,6 +59,8 @@ export interface ImbueCharacterAttrs {
   readonly color?: string;
   /** What it is doing; the rig holds a pose per mood. */
   readonly mood: CharacterMood;
+  /** Whether the user is here: its window is on screen and focused. */
+  readonly isAttending?: boolean;
   /** Soft pool on the surface below, so the character reads as sitting on one. */
   readonly shadow?: boolean;
   /** Whether a press dents it. Off where the character is decoration. */
@@ -73,6 +75,7 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
 
   let stop: (() => void) | null = null;
   let shownMood: CharacterMood | null = null;
+  let wasAttending = false;
   let pressedPointer: number | null = null;
 
   function elementsOf(root: SVGSVGElement): CharacterElements {
@@ -97,7 +100,7 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
       // wander is what gives the resting body its shape, and a rig with it
       // disabled relaxes to the bare oval underneath. Reduced motion asks for
       // no movement, not for a different character.
-      paintAtRest(rig, elements, posture);
+      paintAtRest(rig, elements, (settled) => posture(settled, wasAttending));
       return;
     }
     stop = driveCharacter(rig, elements);
@@ -124,17 +127,23 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
   return {
     oncreate(vnode) {
       const root = vnode.dom as SVGSVGElement;
+      wasAttending = vnode.attrs.isAttending === true;
       shownMood = vnode.attrs.mood;
-      applyMood(rig, shownMood);
+      applyMood(rig, shownMood, wasAttending);
       draw(root);
       onMotionPreferenceChange = () => draw(root);
       reducedMotion.addEventListener("change", onMotionPreferenceChange);
     },
 
     onupdate(vnode) {
+      const isAttending = vnode.attrs.isAttending === true;
       if (vnode.attrs.mood !== shownMood) {
         shownMood = vnode.attrs.mood;
-        applyMood(rig, shownMood);
+        applyMood(rig, shownMood, isAttending);
+      }
+      if (isAttending !== wasAttending) {
+        posture(rig, isAttending);
+        wasAttending = isAttending;
       }
     },
 

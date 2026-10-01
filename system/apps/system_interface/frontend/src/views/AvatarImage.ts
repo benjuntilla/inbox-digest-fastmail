@@ -22,6 +22,9 @@ export interface AvatarImageAttrs {
   readonly design: string;
   readonly defaultDesign: string;
   readonly mood: AvatarMood;
+  /** Whether the user is at this entry's window. Only the character answers it, and only an entry
+   *  knows: a caller that is drawing the avatar as an identifying icon leaves it out. */
+  readonly isAttending?: boolean;
   readonly class: string;
 }
 
@@ -29,7 +32,7 @@ export const AvatarImage: m.Component<AvatarImageAttrs> = {
   view(vnode) {
     const { design, defaultDesign, mood } = vnode.attrs;
     if (design === IMBUE_CHARACTER_DESIGN_ID) {
-      return m(ImbueCharacter, { mood, class: vnode.attrs.class });
+      return m(ImbueCharacter, { mood, isAttending: vnode.attrs.isAttending === true, class: vnode.attrs.class });
     }
     return m("img", {
       "data-avatar-image": design,
@@ -45,6 +48,17 @@ export const AvatarImage: m.Component<AvatarImageAttrs> = {
     });
   },
 };
+
+/**
+ * Whether the user is at this entry's window: focused, and neither minimized nor pulled out into a
+ * desktop window of the chrome's own.
+ *
+ * The last two are asked separately rather than assumed to clear focus: the shell can hold focus on
+ * a window it is not drawing.
+ */
+function isUserAtWindow(entry: TaskbarEntry): boolean {
+  return entry.isFocused && !entry.isMinimized && !entry.isDetached;
+}
 
 /** What an avatar entry's tooltip reads: the title, and a warning when the status may be out of date. */
 function avatarTooltip(title: string, status: AvatarStatus): string {
@@ -81,6 +95,7 @@ export function entryStyleParts(
           design: avatar.design,
           defaultDesign: avatar.defaultDesign,
           mood: avatar.status.mood,
+          isAttending: isUserAtWindow(entry),
           class: imageClass,
         })
       : m.trust(appGlyph(entry.app, glyphSize)),

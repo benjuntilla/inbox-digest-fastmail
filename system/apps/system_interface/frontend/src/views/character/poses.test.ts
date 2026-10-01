@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMood, posture, press, REST_TILT } from "./poses";
+import { applyMood, ATTENDING_TILT, posture, press, REST_TILT } from "./poses";
 import { type BlobRig, createBlobRig } from "./rig";
 
 const STEP = 1 / 60;
@@ -7,7 +7,7 @@ const STEP = 1 / 60;
 /** A rig that has been running long enough to be in its resting posture. */
 function resting(): BlobRig {
   const rig = createBlobRig({ radius: 100 });
-  posture(rig);
+  posture(rig, false);
   for (let i = 0; i < 180; i++) rig.step(STEP);
   return rig;
 }
@@ -79,9 +79,9 @@ describe("moving to a mood", () => {
 
   it("keeps the surface unsettled for as long as there is work", () => {
     const working = resting();
-    applyMood(working, "working");
+    applyMood(working, "working", false);
     const idle = resting();
-    applyMood(idle, "idle");
+    applyMood(idle, "idle", false);
     expect(liveliness(working, 4)).toBeGreaterThan(8);
     // And it is the work doing it, not the body being alive in general.
     expect(liveliness(idle, 4)).toBeLessThan(3);
@@ -89,11 +89,57 @@ describe("moving to a mood", () => {
 
   it("settles again when the work stops", () => {
     const rig = resting();
-    applyMood(rig, "working");
+    applyMood(rig, "working", false);
     for (let i = 0; i < 200; i++) rig.step(STEP);
-    applyMood(rig, "idle");
+    applyMood(rig, "idle", false);
     // Long enough for a held dent to spring out.
     for (let i = 0; i < 180; i++) rig.step(STEP);
     expect(liveliness(rig, 4)).toBeLessThan(3);
+  });
+
+  it("keeps the drawn-up lean while working", () => {
+    const rig = resting();
+    posture(rig, true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    applyMood(rig, "working", true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    expect(rotationOf(rig)).toBeCloseTo((ATTENDING_TILT * 180) / Math.PI, 0);
+  });
+});
+
+describe("the user arriving and leaving", () => {
+  it("draws the character up when the user arrives", () => {
+    const rig = resting();
+    expect(rotationOf(rig)).toBeCloseTo((REST_TILT * 180) / Math.PI, 0);
+    posture(rig, true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    expect(rotationOf(rig)).toBeCloseTo((ATTENDING_TILT * 180) / Math.PI, 0);
+  });
+
+  it("slouches back when the user leaves", () => {
+    const rig = resting();
+    posture(rig, true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    posture(rig, false);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    expect(rotationOf(rig)).toBeCloseTo((REST_TILT * 180) / Math.PI, 0);
+  });
+
+  it("stands the body past vertical, since its own outline leans right", () => {
+    // Guards the shape of the constant, not just its value: a fraction of the resting lean would
+    // land at zero rotation, which still reads as leaning, because the body's own long axis runs
+    // up and to the right before anything rotates it.
+    expect(ATTENDING_TILT).toBeLessThan(0);
+    expect(REST_TILT).toBeGreaterThan(0);
+  });
+
+  it("is idempotent, so a repeated answer costs nothing", () => {
+    const rig = resting();
+    posture(rig, true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    const settled = rotationOf(rig);
+    posture(rig, true);
+    rig.step(STEP);
+    expect(rotationOf(rig)).toBeCloseTo(settled, 1);
   });
 });

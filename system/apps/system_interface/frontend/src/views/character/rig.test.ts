@@ -214,7 +214,8 @@ describe("the shadow on the floor", () => {
   it("fades as the idle float carries the body off the floor", () => {
     const rig = createBlobRig({ radius: 100 });
     /** How far the frame has carried the body up or down, in user units. */
-    const travel = (r: BlobRig): number => Number(/translate\(-?[\d.]+ (-?[\d.]+)\)/.exec(r.frame().transform)?.[1] ?? 0);
+    const travel = (r: BlobRig): number =>
+      Number(/translate\(-?[\d.]+ (-?[\d.]+)\)/.exec(r.frame().transform)?.[1] ?? 0);
     let highest = { y: 0, weight: 1 };
     let lowest = { y: 0, weight: 1 };
     run(rig, 5, (r) => {

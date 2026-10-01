@@ -103,7 +103,12 @@ describe("whether the character has just been chosen", () => {
 
   it("is handed on from the workspace's avatar state", () => {
     const switchedAt = performance.now();
-    const parts = entryStyleParts(avatarEntry(), avatarStateRecord({ design: "imbue-character", switchedAt }), 32, "x");
+    const parts = entryStyleParts(
+      avatarEntry(),
+      avatarStateRecord({ design: "imbue-character", switchedAt }),
+      32,
+      "x",
+    );
     expect((parts.image as m.Vnode<AvatarImageAttrs>).attrs.switchedAt).toBe(switchedAt);
   });
 });

@@ -142,7 +142,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 
 ### Terminal (`system/apps/terminal/src/terminal_app/pages.py`, `pty_page.py`, `dispatch.py`)
 
-- The wrapper page template gains a `#keys` strip shown under 700px on the shorter side with a coarse pointer; keys post `{type: "terminal:key", key, ctrl}` and Ctrl `{type: "terminal:ctrl", armed}`. The pty origin's page gets a script (`terminal_app/pty_page.py`, added to the ttyd client as it is installed; see Decisions) that listens, feeds xterm, and focuses it from a tap in its own frame. The wrapper uses `100dvh` and re-nudges the frame height on `visualViewport` resize so ttyd refits.
+- The wrapper page template gains a `#keys` strip shown on a phone-sized page (the shell's rule) with a coarse pointer; keys post `{type: "terminal:key", key, ctrl}` and Ctrl `{type: "terminal:ctrl", armed}`. The pty origin's page gets a script (`terminal_app/pty_page.py`, added to the ttyd client as it is installed; see Decisions) that listens, feeds xterm, and focuses it from a tap in its own frame. The wrapper uses `100dvh` and re-nudges the frame height on `visualViewport` resize so ttyd refits.
 - `dispatch_test.py` for the script's insertion into the installed client; `test_phone_keys.py`, a `browser` test, for the strip posting keys into a recording frame and the script feeding them to xterm.
 
 ### Browser (`system/apps/browser/src/browser/assets/index.html`)
@@ -157,7 +157,7 @@ Status: implemented. Supersedes `plan-desktop-interface.md` section 4.12 (compac
 ## Implementation phases
 
 1. **Backend state and routes.** Shown history on the client record and its route, `minimized` on the windows route, inventory fields, the workspace name setting. Desktop unaffected; tests green.
-2. **Phone layout skeleton.** The shorter-side mode, `PhoneLayout` with page host (shown plus pinned mounting), bar, home grid, windows sheet and start sheet over the existing store; landing and deep links; the window menu; toasts replacing `alert()` on both layouts; the compact-only branches deleted. The two existing phone e2e scenarios rewritten. A phone can now do everything the desktop could in compact mode, minus minimize.
+2. **Phone layout skeleton.** The phone-sized mode, `PhoneLayout` with page host (shown plus pinned mounting), bar, home grid, windows sheet and start sheet over the existing store; landing and deep links; the window menu; toasts replacing `alert()` on both layouts; the compact-only branches deleted. The two existing phone e2e scenarios rewritten. A phone can now do everything the desktop could in compact mode, minus minimize.
 3. **Switching and resilience.** Agent-op and own-action switching, go-home on removal, visibility resync, close-all with confirm, drag-to-dismiss, long-press menus.
 4. **Install polish.** Title, touch icon, manifest, theme color, safe areas, `dvh`.
 5. **Chat app phone layout.** Header, drawer, row and header kebabs, composer settings button and menu variant, empty state; chat e2e.

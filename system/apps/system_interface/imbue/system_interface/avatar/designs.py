@@ -121,6 +121,23 @@ BUNDLED_DESIGNS: Final[tuple[BundledDesign, ...]] = (
     ),
 )
 
+# The imbue character: the one avatar the shell draws itself, as a physics rig in its own bundle, rather than as
+# a drawing this module animates through the shared stylesheet. It is listed, chosen, and stored exactly like any
+# other design -- only the drawing of it differs, and only in the client (see the frontend's `AvatarImage`).
+#
+# The asset is a still of its resting pose, for the places that need a picture rather than a rig: the chooser's
+# preview, and the image route. It is generated from the rig itself (the frontend's `src/views/character/stillFrame.ts`
+# says how) so it cannot drift from the pose the character actually holds; do not hand-edit it.
+LIVE_DESIGN_ID: Final[DesignId] = DesignId("imbue-character")
+LIVE_DESIGN_LABEL: Final[str] = "Imbue character"
+_LIVE_DESIGN_FILENAME: Final[str] = "imbue-character.svg"
+
+
+def live_design_source() -> str:
+    """The still the shell serves for the character."""
+    return (ASSET_DIRECTORY / _LIVE_DESIGN_FILENAME).read_text(encoding="utf-8")
+
+
 # Deliberately a drawing format, not an embedded document: no scripts, style attributes, arbitrary stylesheets,
 # SMIL, hrefs, image loads, foreign content, or filters. defusedxml refuses DTDs and entities; a presentation URL
 # can only name a local gradient.

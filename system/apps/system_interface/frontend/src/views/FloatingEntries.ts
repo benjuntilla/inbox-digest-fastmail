@@ -72,7 +72,8 @@ export const FloatingEntries: m.Component<FloatingEntriesAttrs> = {
                   "hover:scale-110 " +
                   (entry.isFocused ? "text-primary shadow-overlay " : "text-secondary shadow-raised ")) +
               // Out of sight here either way: minimized, or shown in a desktop window of the chrome's own.
-              (entry.isMinimized || entry.isDetached ? "opacity-70 " : "") +
+              // Not the avatar, though: dimming a character reads as unwell rather than as put away.
+              (!isAvatar && (entry.isMinimized || entry.isDetached) ? "opacity-70 " : "") +
               (isMenuOpen && !isAvatar ? "ring-2 ring-accent" : ""),
             style: rectStyle(rect),
             ...hoverTooltipAttrs(tooltip),

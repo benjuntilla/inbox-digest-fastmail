@@ -72,6 +72,27 @@ describe("FloatingEntries", () => {
     expect(entry.classList.contains("opacity-70")).toBe(true);
   });
 
+  it("does not dim the avatar when its window is away, the way it dims a plain entry", () => {
+    const away = { isMinimized: false, isDetached: true } as const;
+    const plain = render({ entries: [pinnedEntry(away)] });
+    expect((plain.querySelector('[data-pinned-entry="buddy"]') as HTMLElement).classList.contains("opacity-70")).toBe(
+      true,
+    );
+    unmountViews();
+
+    const avatar = render({
+      entries: [
+        pinnedEntry({
+          ...away,
+          look: { mode: "floating", style: "avatar", declaredStyle: "avatar", position: { x: 0.5, y: 0.5 } },
+        }),
+      ],
+    });
+    const entry = avatar.querySelector('[data-pinned-entry="buddy"]') as HTMLElement;
+    expect(entry.getAttribute("data-detached")).toBe("true");
+    expect(entry.classList.contains("opacity-70")).toBe(false);
+  });
+
   it("draws the avatar wearing the mood in the avatar style, marked stale when the status may be old", () => {
     const layer = render({
       entries: [

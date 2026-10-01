@@ -194,9 +194,12 @@ def test_the_strip_shows_only_on_a_phone_sized_touch_page_that_frames_a_terminal
     assert frame_box["y"] + frame_box["height"] == pytest.approx(strip_box["y"])
     assert strip_box["y"] + strip_box["height"] == pytest.approx(viewport["height"])
 
-    # A phone on its side is still a phone: the shorter side decides, as the shell's own layout does.
+    # A phone on its side is still a phone, and a touch page short but wider than any phone is not, as in the
+    # shell's own layout.
     page.set_viewport_size({"width": 852, "height": 393})
     expect(strip).to_be_visible()
+    page.set_viewport_size({"width": 1200, "height": 480})
+    expect(strip).to_be_hidden()
     page.set_viewport_size({"width": 1024, "height": 768})
     expect(strip).to_be_hidden()
     assert page.locator("#pty").bounding_box() == {

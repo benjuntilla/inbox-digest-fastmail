@@ -14,7 +14,7 @@
 
 import m from "mithril";
 import { type CharacterElements, driveCharacter, paintAtRest } from "./characterView";
-import { applyMood, type CharacterMood, posture, press, releasePress } from "./poses";
+import { applyMood, type CharacterMood, jump, posture, press, releasePress } from "./poses";
 import { type BlobRig, createBlobRig } from "./rig";
 import { CHARACTER_COLOR } from "./stillFrame";
 
@@ -65,6 +65,8 @@ export interface ImbueCharacterAttrs {
   readonly shadow?: boolean;
   /** Whether a press dents it. Off where the character is decoration. */
   readonly interactive?: boolean;
+  /** Whether it has just been chosen as the avatar, so it jumps as it appears. Read once, when it mounts. */
+  readonly isArriving?: boolean;
   readonly class?: string;
 }
 
@@ -130,6 +132,7 @@ export function ImbueCharacter(): m.Component<ImbueCharacterAttrs> {
       wasAttending = vnode.attrs.isAttending === true;
       shownMood = vnode.attrs.mood;
       applyMood(rig, shownMood, wasAttending);
+      if (vnode.attrs.isArriving === true && !reducedMotion.matches) jump(rig);
       draw(root);
       onMotionPreferenceChange = () => draw(root);
       reducedMotion.addEventListener("change", onMotionPreferenceChange);

@@ -120,6 +120,37 @@ describe("the user arriving", () => {
   });
 });
 
+describe("being chosen", () => {
+  /** The highest the body got off its resting spot over `count` frames, in viewBox units. */
+  async function highestOver(root: HTMLElement, count: number): Promise<number> {
+    let highest = 0;
+    for (let i = 0; i < count; i++) {
+      await runFrames(1);
+      const transform = root.querySelector("[data-character-body]")?.getAttribute("transform") ?? "";
+      const y = Number(/translate\(-?[\d.]+ (-?[\d.]+)\)/.exec(transform)?.[1] ?? 0);
+      highest = Math.max(highest, -y);
+    }
+    return highest;
+  }
+
+  it("jumps as it appears when it has just been chosen", async () => {
+    const root = render({ isArriving: true });
+    expect(await highestOver(root, 45)).toBeGreaterThan(40);
+  });
+
+  it("stays on the floor when it appears any other way", async () => {
+    // A page load, or its entry drawn somewhere else: only the float moves it.
+    const root = render();
+    expect(await highestOver(root, 45)).toBeLessThan(5);
+  });
+
+  it("does not jump when motion is reduced", async () => {
+    setReducedMotion(true);
+    const root = render({ isArriving: true });
+    expect(await highestOver(root, 45)).toBeLessThan(5);
+  });
+});
+
 describe("reduced motion", () => {
   it("draws the character but holds it still", async () => {
     setReducedMotion(true);

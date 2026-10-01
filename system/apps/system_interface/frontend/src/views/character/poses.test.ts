@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMood, ATTENDING_TILT, posture, press, REST_TILT } from "./poses";
+import { applyMood, ATTENDING_TILT, jump, posture, press, REST_TILT } from "./poses";
 import { type BlobRig, createBlobRig } from "./rig";
 
 const STEP = 1 / 60;
@@ -141,5 +141,74 @@ describe("the user arriving and leaving", () => {
     posture(rig, true);
     rig.step(STEP);
     expect(rotationOf(rig)).toBeCloseTo(settled, 1);
+  });
+});
+
+describe("the arrival jump", () => {
+  /** Ambient motion off, so a trace measures only the jump. */
+  function still(): BlobRig {
+    return createBlobRig({ radius: 100, idle: 0 });
+  }
+
+  /** Height above the floor and vertical squash, every frame for `seconds`. */
+  function trace(rig: BlobRig, seconds: number): Array<{ t: number; up: number; sy: number }> {
+    const rows: Array<{ t: number; up: number; sy: number }> = [];
+    for (let i = 0; i < Math.round(seconds / STEP); i++) {
+      rig.step(STEP);
+      const f = rig.frame();
+      const y = Number(/translate\(-?[\d.]+ (-?[\d.]+)\)/.exec(f.transform)?.[1] ?? 0);
+      rows.push({ t: i * STEP, up: -y, sy: f.scale[1] });
+    }
+    return rows;
+  }
+
+  it("crouches on the floor, leaves it once, and comes back to rest", () => {
+    const rig = still();
+    jump(rig);
+    const rows = trace(rig, 2.5);
+    // The launch is 0.07s in; before it the body is squashed and still down.
+    const gather = rows.filter((r) => r.t < 0.06);
+    expect(Math.min(...gather.map((r) => r.sy))).toBeLessThan(0.92);
+    expect(Math.max(...gather.map((r) => r.up))).toBeLessThan(2);
+
+    const airborne = rows.map((r) => r.up > 2);
+    const takeoffs = airborne.filter((isUp, i) => isUp && !airborne[i - 1]).length;
+    expect(takeoffs).toBe(1);
+    expect(Math.max(...rows.map((r) => r.up))).toBeGreaterThan(40);
+
+    const last = rows[rows.length - 1];
+    expect(last.up).toBeCloseTo(0, 0);
+    expect(last.sy).toBeCloseTo(1, 1);
+  });
+
+  it("stretches on the way up, eases off at the apex, and folds on landing", () => {
+    const rig = still();
+    jump(rig);
+    const rows = trace(rig, 2);
+    const apex = rows.reduce((best, r) => (r.up > best.up ? r : best), rows[0]);
+    const rising = rows.filter((r) => r.t < apex.t && r.up > 5);
+    const landing = rows.filter((r) => r.t > apex.t && r.t < apex.t + 0.6);
+    expect(Math.max(...rising.map((r) => r.sy))).toBeGreaterThan(1.1);
+    expect(apex.sy).toBeLessThan(1);
+    expect(apex.sy).toBeGreaterThan(0.85);
+    expect(Math.min(...landing.map((r) => r.sy))).toBeLessThan(0.75);
+  });
+
+  it("keeps the posture it was holding", () => {
+    const rig = resting();
+    posture(rig, true);
+    for (let i = 0; i < 300; i++) rig.step(STEP);
+    const held = rotationOf(rig);
+    jump(rig);
+    for (let i = 0; i < 180; i++) rig.step(STEP);
+    expect(rotationOf(rig)).toBeCloseTo(held, 0);
+  });
+
+  it("is cancelled by settling", () => {
+    const rig = still();
+    jump(rig);
+    rig.settle();
+    const rows = trace(rig, 1.5);
+    expect(Math.max(...rows.map((r) => r.up))).toBeLessThan(1);
   });
 });

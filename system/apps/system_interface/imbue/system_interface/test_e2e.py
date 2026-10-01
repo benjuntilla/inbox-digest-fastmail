@@ -1869,7 +1869,7 @@ def test_the_avatar_wears_the_mood_of_the_agents_file_and_the_chooser_changes_ev
 
 
 # A phone-shaped browser context, inlined so the emulated UA is pinned rather than drifting with the Playwright
-# version. The shell reads the phone layout off the viewport's shorter side and touch off the coarse pointer.
+# version. The shell reads the phone layout off the viewport's size and touch off the coarse pointer.
 _MOBILE_CONTEXT_ARGS: dict[str, Any] = {
     "user_agent": (
         "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"

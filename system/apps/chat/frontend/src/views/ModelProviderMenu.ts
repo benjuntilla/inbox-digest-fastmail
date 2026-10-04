@@ -680,8 +680,8 @@ export function ModelProviderMenu(): m.Component<ModelProviderMenuAttrs> {
    *
    * Pressing any account but the chat's own begins the switch to it (``beginSwitchTo``): the
    * dialog for a handoff, which takes the model and offers a new chat instead; armed at once for
-   * a rebind (an account on the chat's own harness and lane); run at once for a chat with no
-   * user turn yet. Pressing the armed account again, or the account the chat runs on, takes the
+   * a rebind (an account on the chat's own harness and lane) and for a chat whose account was
+   * signed out; run at once for a chat with no user turn yet. Pressing the armed account again, or the account the chat runs on, takes the
    * choice back. Each row also carries the default toggle: the starred
    * account is the one a new chat opens on when nothing names one (the New Tab tile, the rail
    * shortcut, an agent's `layout.py open chat`).

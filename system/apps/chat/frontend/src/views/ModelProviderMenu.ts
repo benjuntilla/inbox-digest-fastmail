@@ -67,6 +67,7 @@ import {
   areAccountsLoaded,
   getAccounts,
   getDefaultAccountId,
+  isAccountSignedOut,
   openProviderChooser,
 } from "../models/Providers";
 import { beginSwitchTo, beginSwitchToAccountId, openSwitchDialog } from "./SwitchDialog";
@@ -849,6 +850,17 @@ export function ModelProviderMenu(): m.Component<ModelProviderMenuAttrs> {
       // before its first model read, and opencode never leaves it); or the live model may
       // match no catalog option. Only the Model/Effort/Fast rows are suppressed.
       if (chat === undefined) return provisionalChip(chatId);
+      // A chat whose account was signed out runs on nothing until a provider is chosen for it, and
+      // the composer's notice in its place says so and offers the choice: the model it last ran
+      // stays out of the row rather than reading as current. A phone keeps its settings button.
+      if (
+        !isCompact &&
+        chat.handoff === null &&
+        pendingSwitchTarget(chatId) === null &&
+        isAccountSignedOut(chat.active_agent.account_id)
+      ) {
+        return null;
+      }
       // No account to name and no model to show. With no provider signed in, say so; otherwise
       // the chip below stands in (its Provider row reads "No account") until the model arrives,
       // which for a chat whose agent is still connecting takes a while. A phone keeps its settings

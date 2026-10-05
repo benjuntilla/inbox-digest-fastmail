@@ -269,8 +269,7 @@ describe("the switch dialog", () => {
   });
 
   it("arms the switch at once, with no dialog, for a chat whose account was signed out", () => {
-    // Signed out of the chat's own account, then into another from the chat: there is no provider
-    // left to stay on, so choosing one is the whole answer.
+    // Signed out of the chat's own account (OWN is no longer listed), then into another from the chat.
     state.accounts = [CODEX, OTHER_CLAUDE];
     beginSwitchToAccountId("agent-1", OTHER_CLAUDE.id);
     render();

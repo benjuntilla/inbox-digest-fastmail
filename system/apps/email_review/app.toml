@@ -1,0 +1,4 @@
+name = "email-review"
+display_name = "Inbox Digest & Review"
+icon = "icon.svg"
+critical = false

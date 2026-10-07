@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160" role="img" aria-label="Inbox Digest for Fastmail: a digest page with grouped email rows and one-click action buttons">
+  <title>Inbox Digest for Fastmail</title>
+  <rect width="240" height="160" rx="10" fill="#efece4"/>
+  <rect x="10" y="9" width="220" height="143" rx="6" fill="#fafaf7" stroke="#e8e6e0"/>
+
+  <!-- top bar -->
+  <rect x="10" y="9" width="220" height="19" rx="6" fill="#2d4a3e"/>
+  <rect x="10" y="20" width="220" height="8" fill="#2d4a3e"/>
+  <text x="19" y="22" font-family="Georgia, 'Times New Roman', serif" font-size="9" fill="#fafaf7">Inbox Digest</text>
+  <rect x="157" y="14" width="66" height="10" rx="5" fill="#dde7df"/>
+  <text x="190" y="21.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="5.5" fill="#2d4a3e">Refresh &amp; Categorize</text>
+
+  <!-- group: Reply needed -->
+  <rect x="18" y="35" width="3" height="10" rx="1" fill="#b8431f"/>
+  <text x="25" y="43" font-family="Helvetica, Arial, sans-serif" font-size="7.5" font-weight="bold" fill="#1c1b1a">Reply needed</text>
+  <text x="78" y="43" font-family="Helvetica, Arial, sans-serif" font-size="6.5" fill="#918878">3</text>
+  <rect x="18" y="49" width="204" height="12" rx="3" fill="#ffffff" stroke="#f0ede5"/>
+  <rect x="23" y="53.5" width="34" height="3.5" rx="1.5" fill="#5b554c"/>
+  <rect x="62" y="53.5" width="70" height="3.5" rx="1.5" fill="#d6d1c6"/>
+  <rect x="160" y="51.5" width="30" height="7" rx="3.5" fill="#b8431f"/>
+  <text x="175" y="56.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#ffffff">draft reply</text>
+  <rect x="193" y="51.5" width="25" height="7" rx="3.5" fill="none" stroke="#918878" stroke-width="0.7"/>
+  <text x="205.5" y="56.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#5b554c">archive</text>
+  <rect x="18" y="63" width="204" height="12" rx="3" fill="#ffffff" stroke="#f0ede5"/>
+  <rect x="23" y="67.5" width="28" height="3.5" rx="1.5" fill="#5b554c"/>
+  <rect x="56" y="67.5" width="84" height="3.5" rx="1.5" fill="#d6d1c6"/>
+  <rect x="160" y="65.5" width="30" height="7" rx="3.5" fill="#b8431f"/>
+  <text x="175" y="70.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#ffffff">draft reply</text>
+  <rect x="193" y="65.5" width="25" height="7" rx="3.5" fill="none" stroke="#918878" stroke-width="0.7"/>
+  <text x="205.5" y="70.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#5b554c">archive</text>
+
+  <!-- group: Decision needed -->
+  <rect x="18" y="81" width="3" height="10" rx="1" fill="#8a6a2c"/>
+  <text x="25" y="89" font-family="Helvetica, Arial, sans-serif" font-size="7.5" font-weight="bold" fill="#1c1b1a">Decision needed</text>
+  <text x="89" y="89" font-family="Helvetica, Arial, sans-serif" font-size="6.5" fill="#918878">1</text>
+  <rect x="18" y="95" width="204" height="12" rx="3" fill="#ffffff" stroke="#f0ede5"/>
+  <rect x="23" y="99.5" width="40" height="3.5" rx="1.5" fill="#5b554c"/>
+  <rect x="68" y="99.5" width="60" height="3.5" rx="1.5" fill="#d6d1c6"/>
+  <rect x="160" y="97.5" width="30" height="7" rx="3.5" fill="#b8431f"/>
+  <text x="175" y="102.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#ffffff">draft reply</text>
+  <rect x="193" y="97.5" width="25" height="7" rx="3.5" fill="none" stroke="#918878" stroke-width="0.7"/>
+  <text x="205.5" y="102.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#5b554c">archive</text>
+
+  <!-- group: Reading -->
+  <rect x="18" y="113" width="3" height="10" rx="1" fill="#4a6843"/>
+  <text x="25" y="121" font-family="Helvetica, Arial, sans-serif" font-size="7.5" font-weight="bold" fill="#1c1b1a">Reading</text>
+  <text x="60" y="121" font-family="Helvetica, Arial, sans-serif" font-size="6.5" fill="#918878">12</text>
+  <rect x="180" y="114" width="42" height="8" rx="4" fill="#dde7df"/>
+  <text x="201" y="119.6" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.8" fill="#2d4a3e">archive all</text>
+  <rect x="18" y="127" width="204" height="12" rx="3" fill="#ffffff" stroke="#f0ede5"/>
+  <rect x="23" y="131.5" width="30" height="3.5" rx="1.5" fill="#5b554c"/>
+  <rect x="58" y="131.5" width="76" height="3.5" rx="1.5" fill="#d6d1c6"/>
+  <rect x="160" y="129.5" width="30" height="7" rx="3.5" fill="none" stroke="#918878" stroke-width="0.7"/>
+  <text x="175" y="134.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#5b554c">unsubscribe</text>
+  <rect x="193" y="129.5" width="25" height="7" rx="3.5" fill="none" stroke="#918878" stroke-width="0.7"/>
+  <text x="205.5" y="134.8" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.6" fill="#5b554c">mute</text>
+
+  <!-- fade hinting more groups below -->
+  <rect x="18" y="142" width="204" height="6" rx="3" fill="#f3f0e8"/>
+</svg>

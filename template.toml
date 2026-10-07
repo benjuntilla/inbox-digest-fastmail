@@ -1,0 +1,126 @@
+# Machine-readable manifest for this template. The sibling
+# template.md holds the prose, the Requirements list, and the two
+# append-only history logs; this file is authoritative for everything
+# below. Both are generated together -- validate_template.py fails if
+# they disagree.
+format = "v2"
+
+[template]
+slug = "inbox-digest-fastmail"
+title = "Inbox Digest for Fastmail"
+description = "A Fastmail inbox digest and one-click triage app: sorts your inbox into ten groups, lets you archive / mute / spam / unsubscribe in one click, drafts replies into Fastmail Drafts, learns from your corrections, and can run every morning with a heads-up."
+thumbnail = "template.svg"
+version = "v1"
+
+# How this template is DERIVED from the workspace it came from. An
+# update re-runs this recipe rather than diffing two repos, which is what
+# keeps an exclusion excluded even though the thing still exists upstream.
+[recipe]
+include = ["system/apps/email_review", "system/supervisord.conf.d/email-review.conf", ".agents/skills/email-digest", "system/scripts/review_email_moves.py", "uv.lock"]
+data_include = []
+exclude = [
+    "the publisher's personal contacts (their hand-written rows and the imported Fastmail address book in contacts.txt)",
+    "the publisher's account identity (name, sending addresses, org domains) in account.py",
+    "the publisher's inbox data, classification results, saved/starred threads and manual moves under data/.apps/email-review/",
+    "the publisher's move log",
+    "the publisher's morning-run schedule (the cron entry and its runner state); adopters add their own",
+]
+modification_rules = [
+    "reset the account identity to placeholders",
+    "ship only example rows in contacts.txt",
+    "replace the publisher's own newsletter subscriptions with example entries",
+    "use a neutral example domain in docs",
+]
+
+# Everything an adopter must deal with before this is really theirs.
+# One list -- but each entry's KIND says how it is handled, because the
+# two are handled at different times by different mechanisms:
+#
+#   permission / secret / llm = ACTIVATION. The adopting agent acts on
+#   these FIRST and BY ITSELF, initiating each latchkey permission
+#   request and each secret request before asking the user anything.
+#   Every one of them must have a matching requires_ line in template.md
+#   and vice versa -- the validator checks that, because an adopter once
+#   never got prompted for a permission the app needed.
+#
+#   The [[requirements.secret]] entries below were AGGREGATED from the
+#   included apps' app.toml [[secrets]] and skills' SKILL.md secrets:
+#   declarations, plus every data/.secrets/<file>.env the snapshot's
+#   mcp-servers.json and supervisord programs run under. Fix a wrong one
+#   at its declaration, not here.
+#
+#   adaptation = worked through INTERACTIVELY with the user afterwards.
+#   Prose on both sides, so it is not cross-checked.
+#
+[requirements]
+
+[[requirements.permission]]
+scope = "fastmail-api"
+permission = "fastmail-read-all"
+note = "builds the digest from the adopter's inbox; the contacts importer reads their Fastmail address book"
+
+[[requirements.permission]]
+scope = "fastmail-api"
+permission = "fastmail-write-mail"
+note = "archive, mute (creates a Muted mailbox on first use), mark as spam, and saving reply drafts to Drafts; never sends mail"
+
+[requirements.llm]
+method = "keyless"
+note = "claude -p through the bundled email_review/claude_p.py, for the AI review pass (llm_judge.py) and reply drafts (drafts.py); an adopter on the keyed litellm path should switch these calls per the use-ai-integration skill"
+
+[[requirements.adaptation]]
+summary = "account.py ships a placeholder identity (name, sending addresses, org domain, AP forwarder)"
+resolution = "set the adopter's own name, every Fastmail sending identity, org domains, and AP forwarder (or none) before the first real run"
+
+[[requirements.adaptation]]
+summary = "contacts.txt ships with example rows only"
+resolution = "run scripts/import_fastmail_contacts.py --write to fill the managed block from the adopter's Fastmail address book, then add hand-written rows (keep-subscribed newsletters, vendors, a bare school/employer domain)"
+
+[[requirements.adaptation]]
+summary = "the ten-group taxonomy in RULES.md is one publisher's way of triaging"
+resolution = "walk the adopter through the groups and rename, merge or retune them in RULES.md (and the group table in runner.py / sender lists in classify.py)"
+
+[[requirements.adaptation]]
+summary = "the mute action uses a Fastmail mailbox literally named Muted"
+resolution = "if the adopter already has a mailbox by that name, change MUTED_LABEL_NAME in mail_actions.py before the first mute"
+
+[[requirements.adaptation]]
+summary = "the 7 AM morning run is not scheduled"
+resolution = "if wanted, add a cron entry through system/libs/automations/run_job.sh running .agents/skills/email-digest/scripts/daily_digest.py --notify-agent <chat agent id>, as documented in the skill's SKILL.md 'Morning run'"
+
+[[requirements.adaptation]]
+summary = "email-only (mailto) unsubscribes are deliberately not sent"
+resolution = "confirm the adopter accepts that; acting on them would mean sending mail from their account"
+
+# What the included code needs INSTALLED. apt takes bare names: versions
+# are a function of the apt snapshot timestamp, so replaying names at the
+# adopter's timestamp yields versions consistent with the rest of their
+# environment. The other sources are not snapshot-pinned, so for them the
+# recorded version IS the pin (name = version).
+#
+# Nothing extra: the app's Python deps come from its pyproject.toml and
+# uv.lock, the scripts are stdlib + the app package, and the two programs
+# it calls (latchkey, claude) are part of every stock workspace.
+#
+# For an install with no package database (a URL-fetched binary, a browser),
+# ship a system/scripts/env.d/<NNNN>-<slug>-<name>.sh unit with NNNN >= 2000,
+# include it in the recipe above, and list it in env_d_units.
+[environment]
+apt = []
+env_d_units = []
+
+# Templates this agent used on the way to this one, oldest first.
+# A new manifest overrides its predecessor rather than accumulating
+# beside it; the commit hash is what keeps the superseded manifest
+# retrievable in the repo where it is authoritative.
+
+[[lineage]]
+slug = "rubric-review"
+repo_url = "https://github.com/boweiliu/rubric-review"
+commit = "75f3335d1b8f494465a195ccf5e2b557391e2e5f"
+
+[[lineage]]
+slug = "inbox-digest-review"
+repo_url = "https://github.com/imbue-ai/inbox-digest-review-mind-template"
+commit = "0ed139f04fced96fb0e1a7fa01affa12957f8a0c"
+used_on = "2026-10-07"

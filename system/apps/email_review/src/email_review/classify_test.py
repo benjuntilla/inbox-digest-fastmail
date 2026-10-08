@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from email_review import school
+
 _CLASSIFY_PATH = (
     Path(__file__).resolve().parents[5]
     / ".agents/skills/email-digest/scripts/classify.py"
@@ -667,3 +669,40 @@ class TestLearnedSenderRules:
         assert recs[0]["final_bucket"] == "9" and recs[0]["learned_rule"] is True
         assert recs[0]["final_why"].startswith("Learned from your moves")
         assert recs[1]["final_bucket"] == "6" and "learned_rule" not in recs[1]
+
+
+class TestSchoolGroup:
+    def test_school_domain_and_subdomains(self):
+        assert school.is_school("prof@university.example")
+        assert school.is_school("news@reply.university.example")
+        assert not school.is_school("someone@notuniversity.example")
+        assert not school.is_school("a@other.example")
+
+    def test_moves_fyi_cold_notification_reading_only(self):
+        threads = [
+            [{"from_addr": "ta@university.example", "final_bucket": b, "final_why": "x"}]
+            for b in ("1", "2", "3", "6", "7", "8", "9")
+        ]
+        threads.append([{"from_addr": "a@other.example", "final_bucket": "3", "final_why": "x"}])
+        assert school.apply_school_group(threads) == 4
+        assert [t[0]["final_bucket"] for t in threads] == ["1", "2", "11", "11", "7", "11", "11", "3"]
+
+
+class TestNoteToSelf:
+    def _rec(self, to, cc="", frm=OWN):
+        return {
+            "id": "m1", "threadId": "t1", "labels": ["INBOX"], "from": f"Me <{frm}>", "from_addr": frm,
+            "to": to, "cc": cc, "subject": "read this", "snippet": "https://x.example", "date": "",
+        }
+
+    def test_mail_to_yourself_is_a_todo(self, classify_mod):
+        bucket, why = classify_mod.classify(self._rec(f"Me <{OWN}>"), "skipped (no sender)", {}, set())
+        assert bucket == "4", why
+
+    def test_to_another_own_address_is_a_todo(self, classify_mod):
+        bucket, _ = classify_mod.classify(self._rec("alex.doe@gmail.example"), "skipped (no sender)", {}, set())
+        assert bucket == "4"
+
+    def test_mail_to_someone_else_is_still_awaiting_reply(self, classify_mod):
+        bucket, _ = classify_mod.classify(self._rec("pat@x.example", cc=OWN), "skipped (no sender)", {}, set())
+        assert bucket == "5"

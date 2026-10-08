@@ -43,11 +43,11 @@ retirement-provider.example	Retirement Provider	org-fyi	401k administrator — s
 # ---- your entries ----
 # Add your own rows here (same four TAB-separated columns as above).
 #
-# To pull in your whole Fastmail address book, run
-#   scripts/import_fastmail_contacts.py --write
-# It fills a managed "BEGIN Fastmail contacts ... END Fastmail contacts" block
-# at the end of this file; re-run it any time to refresh that block. Rows you
-# add outside the block are left alone.
+# Rows the app writes itself do NOT go in this file. The Fastmail address-book
+# import (scripts/import_fastmail_contacts.py --write, also run weekly) and
+# senders you mark "Keep me subscribed" on the digest page are written to the
+# app's own contacts file, data/.apps/email-review/contacts.txt. Both files are
+# read together; a row here wins over an imported one for the same address.
 #
 # A bare domain row (for example "university.example") marks everyone on your
 # school or employer domain as known, so their mail is never treated as cold

@@ -22,13 +22,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from email_review import fastmail
+from email_review import contacts_files, fastmail
 from email_review.account import (
     ACCOUNT_ADDRS,
     ACCOUNT_FIRST_NAME,
     AP_FORWARDER_ADDRS,
     ORG_DOMAINS,
 )
+from email_review.school import apply_school_group
 
 # ---- Category hints ----
 #
@@ -151,8 +152,7 @@ NEWSLETTER_PLATFORMS = (
 )
 
 def load_contacts() -> tuple[set[str], set[str], set[str], set[str], set[str], set[str], set[str]]:
-    """Parse contacts.txt into 7 lists by category."""
-    path = Path(__file__).parent.parent / "contacts.txt"
+    """Read both contact files (email_review.contacts_files) into 7 sets by category."""
     vendors: set[str] = set()
     contractors: set[str] = set()
     trusted: set[str] = set()
@@ -160,35 +160,21 @@ def load_contacts() -> tuple[set[str], set[str], set[str], set[str], set[str], s
     keep_subscribed: set[str] = set()
     journalists: set[str] = set()
     org_fyi: set[str] = set()
-    if not path.exists():
-        return vendors, contractors, trusted, brokers, keep_subscribed, journalists, org_fyi
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split("\t")
-        if len(parts) < 3:
-            continue
-        addr_field, _name, category = parts[0].strip().lower(), parts[1].strip(), parts[2].strip()
-        # A single row may list several addresses for the same person,
-        # comma-separated (e.g. their work and personal emails).
-        addrs = {a.strip() for a in addr_field.split(",") if a.strip()}
-        if category == "vendor":
-            vendors.update(addrs)
-        elif category == "contractor":
-            contractors.update(addrs)
-        elif category in ("trusted-warm", "personal-service"):
-            # personal-service (e.g. a therapist or coach's scheduling mail) is
-            # treated warm — always shown, never cold — but labeled separately.
-            trusted.update(addrs)
-        elif category == "broker":
-            brokers.update(addrs)
-        elif category == "keep-subscribed":
-            keep_subscribed.update(addrs)
-        elif category == "journalist":
-            journalists.update(addrs)
-        elif category == "org-fyi":
-            org_fyi.update(addrs)
+    by_category = {
+        "vendor": vendors,
+        "contractor": contractors,
+        # personal-service (e.g. a therapist or coach's scheduling mail) is
+        # treated warm — always shown, never cold — but labeled separately.
+        "trusted-warm": trusted,
+        "personal-service": trusted,
+        "broker": brokers,
+        "keep-subscribed": keep_subscribed,
+        "journalist": journalists,
+        "org-fyi": org_fyi,
+    }
+    for addrs, _name, category in contacts_files.rows():
+        if category in by_category:
+            by_category[category].update(addrs)
     return vendors, contractors, trusted, brokers, keep_subscribed, journalists, org_fyi
 
 
@@ -436,6 +422,16 @@ ACK_PATTERNS = re.compile(
 OWN_ADDRS = set(ACCOUNT_ADDRS)
 
 
+def is_note_to_self(rec: dict[str, Any]) -> bool:
+    """Sent from one of your addresses to only your own addresses (or nobody)."""
+    if rec.get("from_addr") not in OWN_ADDRS:
+        return False
+    recipients = {
+        a.lower() for a in re.findall(r"[\w\.\-\+]+@[\w\.\-]+", f"{rec.get('to', '')} {rec.get('cc', '')}")
+    }
+    return recipients <= OWN_ADDRS
+
+
 def has_phishing_tells(subj: str, frm: str, snip: str, addr: str) -> bool:
     """Thin wrapper around the shared phishing rules in
     email_review.phishing — keep the local signature classify.py's callers
@@ -518,6 +514,12 @@ def classify(
     subj = rec["subject"] or ""
     snip = (rec["snippet"] or "").lower()
     frm = rec["from"]
+
+    # Rule 0.5: a note to yourself -> TODO (bucket 4). Mail you send only to
+    # your own addresses (including scheduled send-to-self reminders) is a task
+    # you parked in the inbox, not correspondence awaiting a reply.
+    if is_note_to_self(rec):
+        return ("4", "Note to yourself — a to-do")
 
     # Rule 1 (final, overrides everything): Your outgoing + still in inbox.
     # Two paths:
@@ -889,7 +891,7 @@ def main() -> int:
     #
     # Priority: bucket 1 > 2 > 4 > 10 > 3 > 5 > 9 > 6 > 7 > 8.
     # The dominant bucket in a thread wins for everyone in it.
-    PRIORITY = {b: i for i, b in enumerate(["1", "2", "4", "10", "3", "5", "9", "6", "7", "8"])}
+    PRIORITY = {b: i for i, b in enumerate(["1", "2", "4", "10", "11", "3", "5", "9", "6", "7", "8"])}
     by_thread: dict[str, list[dict[str, Any]]] = {}
     for r in records:
         by_thread.setdefault(r["threadId"], []).append(r)
@@ -980,6 +982,10 @@ def main() -> int:
                     f"You are on Cc only; latest inbound's To: is "
                     f"{latest_inbound['to'][:60]} — ask is for the To recipient"
                 )
+
+    # Step 7: School (email_review.school). Threads with a school sender that
+    # landed in FYI, cold outreach, notifications, or reading move to School.
+    apply_school_group(list(by_thread.values()))
 
     # Step 8: dedup bucket 5 by threadId (keep most-recent only) — still needed
     # for cases where the same outgoing fanned out to N recipients.

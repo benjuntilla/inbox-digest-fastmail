@@ -1,8 +1,8 @@
 ---
 title: "Inbox Digest for Fastmail"
-description: "A Fastmail inbox digest and one-click triage app: sorts your inbox into ten groups, lets you archive / mute / spam / unsubscribe in one click, drafts replies into Fastmail Drafts, learns from your corrections, and can run every morning with a heads-up."
+description: "A Fastmail inbox digest and triage app: sorts your inbox into eleven groups (including School), archives a thread or a whole group with one button, writes AI reply drafts into Fastmail Drafts, adds event invites to your calendar, writes a weekly summary of your newsletters, learns from your corrections, and can run every morning with a heads-up."
 thumbnail: "template.svg"
-version: v1
+version: v2
 format: v2
 ---
 
@@ -16,21 +16,23 @@ follow "How to adapt it" below.
 
 ## What it is
 
-A Fastmail inbox digest and one-click triage app: sorts your inbox into ten groups, lets you archive / mute / spam / unsubscribe in one click, drafts replies into Fastmail Drafts, learns from your corrections, and can run every morning with a heads-up.
+A Fastmail inbox digest and triage app: sorts your inbox into eleven groups (including School), archives a thread or a whole group with one button, writes AI reply drafts into Fastmail Drafts, adds event invites to your calendar, writes a weekly summary of your newsletters, learns from your corrections, and can run every morning with a heads-up.
 
 An inbox full of mixed mail hides the handful of messages that need you. This
-template reads the adopter's Fastmail inbox and sorts every thread into ten
+template reads the adopter's Fastmail inbox and sorts every thread into eleven
 groups -- Reply needed, Decision needed, FYI, TODO, Sent / awaiting reply,
 Cold outreach, Marketing / spam / phishing, In-product notifications, Reading,
-and Work FYI. A rules pass (mailing-list headers, a who's-who contacts list,
+Work FYI, and School. A rules pass (mailing-list headers, a who's-who contacts list,
 phishing checks) is followed by an AI review pass for the ambiguous cases. The
 result is the **Inbox Digest & Review** window: one page with a section per
-group, a one-line reason for every thread, and buttons to archive, mute, mark
-as spam, unsubscribe, or move a thread to a different group. For threads that
+group, a one-line reason for every thread, and buttons to archive a thread (or
+a whole noisy group), add an event invite to the calendar (it asks first, and
+can be undone), or move a thread to a different group. For threads that
 need a reply it can write a draft and save it in Fastmail Drafts for the user
 to edit and send -- the app never sends mail itself. Every manual move is
 logged and turned into sender rules, so the sorting gets better the more it is
-corrected. An optional 7 AM run sorts the inbox before the user wakes and sends
+corrected. A reading-summary page condenses the week's newsletters into one
+page with links back to each source. An optional 7 AM run sorts the inbox before the user wakes and sends
 a notification counting what needs them.
 
 This is a Fastmail adaptation of the Gmail-based
@@ -55,9 +57,14 @@ What each one is:
 - `system/apps/email_review` -- the app (a Python package, FastAPI + uvicorn).
   `runner.py` serves the digest page and the action endpoints. `fastmail.py`
   is a small JMAP client that reaches Fastmail through `latchkey curl`.
-  `mail_actions.py` does archive, mute (files the thread in a "Muted" mailbox),
-  spam, and unsubscribe (one-click HTTP links only). `drafts.py` writes reply
-  drafts into Fastmail Drafts. `claude_p.py` is the keyless Claude helper.
+  `mail_actions.py` does archive, plus the mute (files the thread in a "Muted"
+  mailbox), spam, and unsubscribe (one-click HTTP links only, and only after
+  the user confirms) actions the agent can run on request. `drafts.py` writes
+  reply drafts into Fastmail Drafts. `calendar_events.py` reads an event out of
+  an email and adds it to the Fastmail calendar. `reading_summary.py` writes
+  the weekly reading summary. `school.py` sorts school mail into the School
+  group. `contacts_files.py` reads the hand-written and the app-written
+  contacts files. `claude_p.py` is the keyless Claude helper.
   `account.py` is the "who am I" identity, and `phishing.py` the impersonation
   checks. Tests sit beside each module.
 - `system/supervisord.conf.d/email-review.conf` -- the supervisord program
@@ -65,11 +72,12 @@ What each one is:
   (using `app.toml`, so the window appears as "Inbox Digest & Review"), then
   runs the `email-review` entry point on `127.0.0.1:8091`.
 - `.agents/skills/email-digest` -- the skill that does the sorting.
-  `SKILL.md` describes the pipeline and `RULES.md` the ten-group rules.
+  `SKILL.md` describes the pipeline and `RULES.md` the eleven-group rules.
   `contacts.txt` is the who's-who list (example rows only). `scripts/` holds
   the pipeline steps (`propagate_mutes.py`, `classify.py`,
   `synthesize_overrides.py`, `llm_judge.py`), the morning run
-  (`daily_digest.py`), and maintenance helpers: `import_fastmail_contacts.py`,
+  (`daily_digest.py`), the weekly reading summary (`reading_summary.py`), and
+  maintenance helpers: `import_fastmail_contacts.py`,
   `contact_audit.py`, `bulk_archive.py` / `bulk_archive_undo.py`, and
   `check_unsub_target.py`.
 - `system/scripts/review_email_moves.py` -- a command-line view of the move
@@ -85,11 +93,14 @@ review pass. The results land in `data/.apps/email-review/` -- the fetched
 messages with their classification (`data.json`), the user's manual moves
 (`bucket_overrides.json`), and the move log. The page reads them from there. Every one-click action is a
 JMAP call through latchkey. `daily_digest.py` runs the same pipeline headless and posts one
-notification through the notify-user skill.
+notification through the notify-user skill. The weekly reading summary is
+saved with its sources under `data/.apps/email-review/reading_summaries/`, and
+the contacts importer writes to the app's own contacts file there
+(`data/.apps/email-review/contacts.txt`), never to the skill's `contacts.txt`.
 
 ## Recipe
 
-This template is version `v1`. It is not a fork of the
+This template is version `v2`. It is not a fork of the
 workspace it came from -- it is DERIVED from it by a recipe: include these
 paths, leave these out, apply these published-version rules. An update re-runs
 the recipe against the current workspace and publishes the result as the next
@@ -122,9 +133,15 @@ Activation:
   adopting agent initiates this via a latchkey permission request during
   setup -- powers archive, mute (creates a "Muted" mailbox on first use),
   mark as spam, and saving reply drafts to Drafts; nothing ever sends mail)
+- requires_permission: fastmail-api / fastmail-write-calendars (user-approved;
+  the adopting agent initiates this via a latchkey permission request during
+  setup -- powers the add-to-calendar button, which adds an event the user
+  confirmed to their Fastmail calendar and deletes it again on undo)
 - requires_llm: calls Claude via the keyless subscription path (`claude -p`,
   through the bundled `email_review/claude_p.py`) for the AI review pass
-  (`llm_judge.py`) and reply drafts (`drafts.py`); an adopter on the keyed
+  (`llm_judge.py`), reply drafts (`drafts.py`), reading an event out of an
+  email for add-to-calendar (`calendar_events.py`), and the weekly reading
+  summary (`reading_summary.py`); an adopter on the keyed
   litellm path (`ANTHROPIC_API_KEY` set) should switch those calls per the
   `use-ai-integration` skill
 
@@ -144,10 +161,10 @@ Adaptation:
   hand-written rows for anything special: newsletters to keep, vendors,
   contractors, and a bare-domain row for their school or employer domain.
   Without this, the first digest treats almost everyone as cold outreach.
-- **Opinionated ten-group taxonomy.** `.agents/skills/email-digest/RULES.md`
+- **Opinionated eleven-group taxonomy.** `.agents/skills/email-digest/RULES.md`
   encodes one specific way to triage: the group list, the header pre-filter,
   and the cold-outreach and phishing heuristics. Walk the adopter through the
-  ten groups and rename, merge, or retune any that do not match how they work.
+  eleven groups and rename, merge, or retune any that do not match how they work.
   `RULES.md` is the place to change them, along with the group table in
   `runner.py` and `classify.py`'s sender lists (`READING_SENDERS` ships with
   example entries only).
@@ -166,6 +183,19 @@ Adaptation:
   one-click HTTP links. When a sender offers only a `mailto:` unsubscribe, the
   app reports it and does nothing, because acting on it would mean sending mail
   from the adopter's account. Confirm the adopter is fine with that.
+- **School group is off.** `account.py` ships `SCHOOL_DOMAINS` empty, so
+  nothing lands in the School group. If the adopter is a student, set it to
+  their school's domains (e.g. `("university.example",)`); school mail that
+  needs no reply or decision then sorts into School. Otherwise leave it empty.
+- **Weekly reading summary and contacts refresh are off.** Neither is
+  scheduled in a fresh workspace. If the adopter wants them, add cron entries
+  through `system/libs/automations/run_job.sh` the same way as the morning run:
+  `.agents/skills/email-digest/scripts/reading_summary.py` on Sundays at 8 AM
+  (summarizes the Reading group's week and archives newsletters that were never
+  opened; the summary page's Undo puts them back) and
+  `import_fastmail_contacts.py --write` on Sundays at 6 AM. Both are documented
+  in the skill's `SKILL.md` ("Weekly reading summary" and "Import the Fastmail
+  address book").
 
 ## Environment
 
@@ -216,6 +246,8 @@ appends one entry per version (newest last); earlier entries are never rewritten
 This is distinct from "Adaptation history" below, which is the ADOPTERS' log.
 
 ### v1 (2026-10-07) -- first publish: Fastmail adaptation of inbox-digest-review
+
+### v2 (2026-10-08) -- unsubscribe asks first (with a never-unsubscribe list); School group; weekly reading summary; add-to-calendar; weekly contacts refresh; notes-to-self are TODOs; smart/save buttons removed
 
 ## Adaptation history
 

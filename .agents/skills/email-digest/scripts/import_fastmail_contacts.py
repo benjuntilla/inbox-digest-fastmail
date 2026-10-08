@@ -11,13 +11,16 @@ Skipped: your own addresses (account.ACCOUNT_ADDRS), automated senders
 (a long hex hash before the @, e.g. Craigslist replies), and any address that already
 has a hand-written row in contacts.txt -- a hand-written category always wins.
 
-The imported rows live in one managed block in contacts.txt, between the
-BEGIN/END markers below; a re-run replaces that block and touches nothing
-else. The raw cards are saved to data/.apps/email-review/fastmail_contacts.json.
+The imported rows live in one managed block, between the BEGIN/END markers
+below, in the app's own contacts file under data/ (email_review.contacts_files)
+-- never in the skill's hand-written contacts.txt, so the weekly scheduled run
+does not edit a file saved alongside the code. A re-run replaces that block
+and touches nothing else (e.g. the "never unsubscribe" rows the page adds).
+The raw cards are saved to data/.apps/email-review/fastmail_contacts.json.
 
 Usage:
     uv run python .agents/skills/email-digest/scripts/import_fastmail_contacts.py          # dry run
-    uv run python .agents/skills/email-digest/scripts/import_fastmail_contacts.py --write  # update contacts.txt
+    uv run python .agents/skills/email-digest/scripts/import_fastmail_contacts.py --write  # update the app's contacts file
 """
 
 from __future__ import annotations
@@ -30,11 +33,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from email_review import fastmail
+from email_review import contacts_files, fastmail
 from email_review.account import ACCOUNT_ADDRS
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-CONTACTS_PATH = SCRIPTS_DIR.parent / "contacts.txt"
 RAW_PATH = Path("data/.apps/email-review/fastmail_contacts.json")
 BEGIN = "# ---- BEGIN Fastmail contacts (managed by import_fastmail_contacts.py; re-run to refresh) ----"
 END = "# ---- END Fastmail contacts ----"
@@ -117,20 +119,24 @@ def main() -> int:
     RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
     RAW_PATH.write_text(json.dumps(cards, indent=2))
 
-    text = CONTACTS_PATH.read_text()
+    hand = contacts_files.HAND_CONTACTS_PATH
+    app_file = contacts_files.APP_CONTACTS_PATH
+    text = app_file.read_text() if app_file.exists() else ""
     outside, _ = split_managed(text)
-    skip = hand_written_addrs(outside) | {a.lower() for a in ACCOUNT_ADDRS}
+    hand_text = hand.read_text() if hand.exists() else ""
+    skip = hand_written_addrs(hand_text) | hand_written_addrs(outside) | {a.lower() for a in ACCOUNT_ADDRS}
     rows = build_rows(cards, skip, _automated_patterns())
 
     print(f"{len(cards)} Fastmail cards -> {len(rows)} trusted-warm rows", file=sys.stderr)
     for r in rows[:10]:
         print("  " + r.replace("\t", " | "), file=sys.stderr)
     if not args.write:
-        print("Dry run. Re-run with --write to update contacts.txt.", file=sys.stderr)
+        print(f"Dry run. Re-run with --write to update {app_file}.", file=sys.stderr)
         return 0
     block = "\n".join([BEGIN, *rows, END]) + "\n"
-    CONTACTS_PATH.write_text(outside.rstrip("\n") + "\n\n" + block)
-    print(f"Wrote {len(rows)} rows to {CONTACTS_PATH}", file=sys.stderr)
+    app_file.parent.mkdir(parents=True, exist_ok=True)
+    app_file.write_text((outside.rstrip("\n") + "\n\n" if outside.strip() else "") + block)
+    print(f"Wrote {len(rows)} rows to {app_file}", file=sys.stderr)
     return 0
 
 

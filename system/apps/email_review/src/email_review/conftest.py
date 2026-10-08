@@ -16,3 +16,4 @@ account.ACCOUNT_FIRST_NAME = "Alex"
 account.ACCOUNT_ADDRS = {"alex@yourcompany.example", "alex.doe@gmail.example"}
 account.ORG_DOMAINS = ("yourcompany.example",)
 account.AP_FORWARDER_ADDRS = ("ap@yourcompany.example",)
+account.SCHOOL_DOMAINS = ("university.example",)

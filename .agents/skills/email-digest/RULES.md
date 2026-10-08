@@ -206,6 +206,7 @@ content-aware pass (next section) can override.
 
 | Signal | Starting bucket |
 |---|---|
+| From one of your addresses to only your own addresses (a note to yourself, incl. scheduled send-to-self) | 4 TODO (final) |
 | In the Inbox and from one of your own addresses (your outgoing kept visible) | 5 (final — no further classification) |
 | Has a `List-Unsubscribe` header (`CATEGORY_PROMOTIONS` hint) | 7 (content pass may re-route to 6 if cold outreach) |
 | Has a `List-Id` header but no `List-Unsubscribe` (`CATEGORY_FORUMS` hint) | 9 |

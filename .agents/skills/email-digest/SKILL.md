@@ -1,6 +1,6 @@
 ---
 name: email-digest
-description: Build an inbox digest for the user. Reads the Fastmail inbox, classifies every message into the 10-bucket taxonomy via mailing-list header hints + content-aware rules, and surfaces what needs a reply within 48hrs, what decisions are pending, what's truly cold outreach, what you're waiting on, and what's pure noise. Use when the user says "show me my digest", "what's in my inbox", "what do I need to reply to", "what am I waiting on", or asks to triage / process their email.
+description: Build an inbox digest for the user. Reads the Fastmail inbox, classifies every message into the 11-bucket taxonomy via mailing-list header hints + content-aware rules, and surfaces what needs a reply within 48hrs, what decisions are pending, what's truly cold outreach, what you're waiting on, and what's pure noise. Use when the user says "show me my digest", "what's in my inbox", "what do I need to reply to", "what am I waiting on", or asks to triage / process their email.
 ---
 
 # Email digest skill
@@ -100,7 +100,12 @@ The email-review web UI performs the triage actions directly against Fastmail
   (RFC 8058 POST or GET). Email-only (mailto) unsubscribes are never sent; the
   app has no permission to send mail, so those fall back to mute.
 
-### Smart-action ruleset (buckets 6 and 7 buttons)
+### Smart-action ruleset (agent use only)
+
+The page no longer shows "smart", "smart all", or "save" buttons (removed at
+the user's request): rows offer move / ask / draft reply / add to calendar /
+archive, and noisy groups have "archive all". The ruleset below still backs
+`/api/smart-action` for when the user asks the agent to clean something up.
 
 The UI shows an "Archive / Unsub / Mute / Spam" button on buckets 6 (Cold
 outreach + events) and 7 (Marketing / spam / phishing), and per-row on 8/9.
@@ -116,7 +121,13 @@ order (implemented in `mail_actions.smart_action`):
    unsubscribing would drop you from your own group. Preflight standalone with
    `scripts/check_unsub_target.py --thread-id <id>` (verdict `external` = safe,
    `internal-forwarder` / `no-header` = do not unsubscribe).
-4. **Unsubscribe** via the `List-Unsubscribe` header if present and usable.
+4. **Unsubscribe** via the `List-Unsubscribe` header if present and usable --
+   but only after the user confirms. The first call returns
+   `needs_confirm`; the page asks "Unsubscribe from X?" with Unsubscribe /
+   Keep me subscribed / cancel. "Keep me subscribed" adds a `keep-subscribed`
+   row to the app's own contacts file, `data/.apps/email-review/contacts.txt`
+   (section "never unsubscribe"), and archives instead.
+   Bulk "smart all" asks once for all such senders at the end.
 5. **Mute** for buckets 6/7/8/9 when there's no usable unsubscribe option —
    moves the thread to the `Muted` mailbox.
 6. **Mark as spam** if the snippet has phishing tells (urgent ACH/wire).
@@ -124,6 +135,14 @@ order (implemented in `mail_actions.smart_action`):
 
 Every action returns enough info for the undo toast to reverse it. Unsubscribe
 undo can move the thread back to the Inbox but cannot re-subscribe.
+
+## School group
+
+Bucket 11, "School" (`email_review/school.py`). `classify.py` step 7 and the
+AI review pass move a thread to it when a sender is on one of
+`account.SCHOOL_DOMAINS` (subdomains included) and the thread had landed in
+FYI (3), cold outreach (6), notifications (8), or reading (9). Reply needed, decisions,
+TODOs, and marketing keep their bucket. Empty `SCHOOL_DOMAINS` turns it off.
 
 ## Learning from manual moves
 
@@ -142,21 +161,25 @@ which are worth turning into a RULES.md / contacts.txt change by hand.
 Categorize pipeline, then one notification counting the threads that need a
 reply, a decision, or a to-do.
 
-The schedule is off until you add it. Per the `manage-scheduled-tasks` skill,
-write `data/.state/cron.d/inbox-digest-morning` with this one line
-(substitute the id of the chat that should own the heads-up -- that chat's
-`$MNGR_AGENT_ID`), then `install -m 0644` it into `/etc/cron.d/`:
+## Add to calendar
 
-```
-* * * * *   root   /home/user/workspace/system/libs/automations/with_agent_env.sh env MINDS_JOB_STATE_DIR=/home/user/workspace/data/.state/jobs /home/user/workspace/system/libs/automations/run_job.sh inbox-digest-morning --every 1d --at 7 /home/user/workspace/.venv/bin/python /home/user/workspace/.agents/skills/email-digest/scripts/daily_digest.py --notify-agent <chat agent id> >> /var/log/supervisor/inbox-digest-morning.log 2>&1
-```
+Rows in Decision, FYI, TODO, Cold outreach + events, and School have an "add
+to calendar" button (`email_review/calendar_events.py`). Claude reads the
+latest message and returns the event (title, local start + IANA time zone,
+duration, location, join link) or says there is none; the page shows it and
+asks before adding. It goes to the default Fastmail calendar, or to a
+calendar named "School" for School threads. Undo deletes the event. Needs the
+`fastmail-api / fastmail-write-calendars` permission.
 
-It runs under the workspace venv's Python because the scripts import the
-`email_review` package. `MINDS_JOB_STATE_DIR` pins the runner's state to
-`data/.state/jobs` (`run_job.sh` otherwise resolves the workspace one level
-short and keeps it under `system/data/`). Without `--notify-agent` the run
-still sorts the inbox but sends no notification. Delete both copies of the
-entry to turn it off.
+## Weekly reading summary
+
+`scripts/reading_summary.py` (scheduled Sundays 8 AM via
+`data/.state/cron.d/inbox-digest-reading-summary`) has Claude summarize the
+Reading group's last 7 days into one page, saved with its sources to
+`data/.apps/email-review/reading_summaries/<date>.json` and shown at the app's
+`/reading-summary`. The weekly run then archives newsletters never opened
+(Fastmail `$seen` unset); the page's Undo puts them back. "Summarize now" on
+the page writes a summary without archiving.
 
 ## Maintaining the contacts file
 
@@ -183,10 +206,13 @@ exemptions need an exact-address row.
 ### Import the Fastmail address book: `import_fastmail_contacts.py`
 
 Everyone in the Fastmail contacts with an email address becomes a
-`trusted-warm` row in a managed block at the end of contacts.txt (own
-addresses, automated senders, one-off relay addresses, and anything with a
-hand-written row are skipped). Re-run after the address book changes; it
-replaces only its own block. Dry run by default:
+`trusted-warm` row in a managed block of the app's own contacts file,
+`data/.apps/email-review/contacts.txt` (own addresses, automated senders,
+one-off relay addresses, and anything with a hand-written row are skipped).
+That file also holds the "never unsubscribe" rows the digest page adds; the
+classifier reads it together with this skill's hand-written contacts.txt
+(`email_review/contacts_files.py`). It runs every Sunday at 6 AM
+(`data/.state/cron.d/inbox-digest-contacts`); run it by hand any time:
 
 ```bash
 uv run python .agents/skills/email-digest/scripts/import_fastmail_contacts.py --write

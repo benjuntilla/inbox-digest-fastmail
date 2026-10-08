@@ -42,3 +42,10 @@ ORG_DOMAINS: tuple[str, ...] = ("yourcompany.example",)
 # Their From identity says nothing about the original sender, so they stay
 # subject to phishing detection.
 AP_FORWARDER_ADDRS: tuple[str, ...] = ("ap@yourcompany.example",)
+
+# Your school's domains. Mail from these (or their subdomains) that is FYI,
+# a notification, or reading lands in the "School" group instead, so class and
+# advising mail sits together. Things that need a reply or a decision stay in
+# those groups; marketing stays marketing. Leave empty if you're not a student,
+# e.g. ("university.example",)
+SCHOOL_DOMAINS: tuple[str, ...] = ()

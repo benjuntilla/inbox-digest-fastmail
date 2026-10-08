@@ -497,3 +497,18 @@ class TestTrackingPixels:
         }
         body, _ = runner.extract_message_html(payload)
         assert "https://cdn.test/banner.jpg" in body
+
+
+class TestNoSmartOrSaveButtons:
+    """The page offers plain archive only: no per-row smart or save buttons,
+    and every group's bulk button is "archive all"."""
+
+    def test_rows_have_no_smart_or_save(self, make_message):
+        for bucket in runner.BUCKETS:
+            html = runner.render_thread("t1", [make_message()], bucket)
+            assert "smartActionThread(" not in html
+            assert "saveThread(" not in html
+
+    def test_no_bucket_offers_smart(self):
+        assert not any(b.get("smart") for b in runner.BUCKETS.values())
+        assert "smart" not in {b.get("bulk") for b in runner.BUCKETS.values()}

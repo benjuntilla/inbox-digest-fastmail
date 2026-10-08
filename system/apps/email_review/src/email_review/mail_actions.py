@@ -13,10 +13,9 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 from typing import Any
 
-from email_review import fastmail
+from email_review import contacts_files, fastmail
 from email_review.account import ORG_DOMAINS
 from email_review.fastmail import GatewayUnreachable
 
@@ -27,7 +26,6 @@ __all__ = ["GatewayUnreachable"]
 # resolved (and created on first use) at runtime — see get_muted_label_id().
 MUTED_LABEL_NAME = "Muted"
 
-CONTACTS_PATH = Path(".agents/skills/email-digest/contacts.txt")
 
 # Domains you are internal to (from account.ORG_DOMAINS). When a
 # List-Unsubscribe URL or mailto target lives under one of these, treat the
@@ -59,23 +57,62 @@ def _is_internal_forwarder_unsub(list_unsub_header: str) -> bool:
     return any(d in lower for d in INTERNAL_FORWARDER_DOMAINS)
 
 
+def _sender_addr(from_header: str) -> str:
+    m = re.search(r"<([^>]+)>", from_header or "")
+    return (m.group(1) if m else (from_header or "")).strip().lower()
+
+
+def _sender_name(from_header: str) -> str:
+    name = (from_header or "").split("<")[0].strip().strip('"').strip()
+    return name or _sender_addr(from_header)
+
+
+def _has_usable_unsubscribe(list_unsub: str) -> bool:
+    """Whether try_unsubscribe could act on this header (a web link). Email-only
+    unsubscribes are never sent, so they need no confirmation."""
+    return bool(re.search(r"<https?://[^>]+>", list_unsub or ""))
+
+
+class NotAnEmailAddress(ValueError):
+    """add_keep_subscribed was given something that is not an address."""
+
+
+KEEP_SUBSCRIBED_SECTION = "# ---- never unsubscribe (added from the inbox digest page) ----"
+
+
+def add_keep_subscribed(addr: str, name: str = "") -> bool:
+    """Protect a sender from ever being unsubscribed: add a keep-subscribed row
+    to the app's contacts file, in its own section above the imported block.
+    Returns False if the address is already protected."""
+    addr = (addr or "").strip().lower()
+    if not addr or "@" not in addr:
+        raise NotAnEmailAddress(f"not an email address: {addr!r}")
+    if _is_keep_subscribed(addr):
+        return False
+    row = "\t".join([addr, (name or addr).replace("\t", " "), "keep-subscribed", "marked from the digest page"])
+    path = contacts_files.APP_CONTACTS_PATH
+    text = path.read_text() if path.exists() else ""
+    if KEEP_SUBSCRIBED_SECTION in text:
+        head, _, tail = text.partition(KEEP_SUBSCRIBED_SECTION + "\n")
+        text = head + KEEP_SUBSCRIBED_SECTION + "\n" + row + "\n" + tail
+    else:
+        marker = "# ---- BEGIN Fastmail contacts"
+        block = KEEP_SUBSCRIBED_SECTION + "\n" + row + "\n\n"
+        text = text.replace(marker, block + marker, 1) if marker in text else text.rstrip("\n") + "\n\n" + block
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return True
+
+
 def _load_keep_subscribed() -> set[str]:
-    """Read contacts.txt and return the keep-subscribed entries. These are
-    senders the user wants to stay subscribed to — smart-action archives
-    them but must NEVER unsubscribe.
+    """The keep-subscribed entries from both contact files. These are senders
+    the user wants to stay subscribed to — smart-action archives them but must
+    NEVER unsubscribe.
     """
     out: set[str] = set()
-    if not CONTACTS_PATH.exists():
-        return out
-    for line in CONTACTS_PATH.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split("\t")
-        if len(parts) < 3:
-            continue
-        if parts[2].strip() == "keep-subscribed":
-            out.add(parts[0].strip().lower())
+    for addrs, _name, category in contacts_files.rows():
+        if category == "keep-subscribed":
+            out.update(addrs)
     return out
 
 
@@ -200,7 +237,15 @@ def try_unsubscribe(message_id: str, thread_id: str) -> tuple[bool, str]:
     return False, "List-Unsubscribe header had no usable URL or mailto"
 
 
-def smart_action(message_id: str, thread_id: str, bucket: str, snippet: str = "", sender: str = "", subject: str = "") -> dict[str, Any]:
+def smart_action(
+    message_id: str,
+    thread_id: str,
+    bucket: str,
+    snippet: str = "",
+    sender: str = "",
+    subject: str = "",
+    confirm_unsubscribe: bool = False,
+) -> dict[str, Any]:
     """Apply the smart-action ruleset:
 
     - **If a usable unsubscribe option exists, unsubscribe** -- for ANY bucket,
@@ -281,7 +326,18 @@ def smart_action(message_id: str, thread_id: str, bucket: str, snippet: str = ""
             "undo_remove": ["ARCHIVE"],
         }
 
-    # A real List-Unsubscribe option is present -> try to unsubscribe.
+    # A real List-Unsubscribe option is present -> try to unsubscribe, but
+    # only once the user has said yes: an unsubscribe cannot be undone from
+    # here, so the first call changes nothing and asks instead.
+    if list_unsub and not confirm_unsubscribe and _has_usable_unsubscribe(list_unsub):
+        return {
+            "action": "needs_confirm",
+            "thread_id": thread_id,
+            "sender": sender,
+            "sender_addr": _sender_addr(sender),
+            "sender_name": _sender_name(sender),
+            "detail": "Unsubscribing can't be undone; waiting for your confirmation",
+        }
     if list_unsub:
         unsub_ok, unsub_reason = try_unsubscribe(message_id, thread_id)
         if unsub_ok:

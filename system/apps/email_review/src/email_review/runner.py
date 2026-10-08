@@ -17,12 +17,19 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+import markdown
 import nh3
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
-from email_review import drafts, fastmail, mail_actions
+from email_review import (
+    calendar_events,
+    drafts,
+    fastmail,
+    mail_actions,
+    reading_summary,
+)
 
 ROOT_PATH = os.environ.get("ROOT_PATH", "")
 app = FastAPI(title="email-review", root_path=ROOT_PATH)
@@ -108,6 +115,10 @@ EDITABLE_FILES = [
 
 # Buckets whose rows get a "draft reply" button.
 DRAFTABLE_BUCKETS = {"1", "2"}
+# Buckets whose rows get an "add to calendar" button (where invites land).
+CALENDAR_BUCKETS = {"2", "3", "4", "6", "11"}
+# Time zone assumed when an invite names none: the workspace's (the user's).
+DEFAULT_TZ = (Path("/etc/timezone").read_text().strip() if Path("/etc/timezone").exists() else "") or "UTC"
 
 BUCKETS = {
     # `smart` = whether to show the per-row smart-action button
@@ -122,17 +133,20 @@ BUCKETS = {
     "3":  {"name": "FYI / read",                  "annot": "fyi",      "archivable": True,  "smart": False, "bulk": "archive"},
     "4":  {"name": "TODO",                        "annot": "todo",     "archivable": True,  "smart": False, "bulk": None},
     "5":  {"name": "Sent / awaiting reply",       "annot": "waiting",  "archivable": True,  "smart": False, "bulk": None},
-    "6":  {"name": "Cold outreach + event invites","annot": "scan",    "archivable": True,  "smart": True,  "bulk": "smart"},
-    "7":  {"name": "Marketing / spam / phishing", "annot": "noise",    "archivable": True,  "smart": True,  "bulk": "smart"},
+    "6":  {"name": "Cold outreach + event invites","annot": "scan",    "archivable": True,  "smart": False, "bulk": "archive"},
+    "7":  {"name": "Marketing / spam / phishing", "annot": "noise",    "archivable": True,  "smart": False, "bulk": "archive"},
     # Bucket 8: bulk archive is the right default (most in-product notifications
     # are auto-generated), but a per-row smart button lets you unsubscribe
     # from any specific SaaS notification stream you don't want.
-    "8":  {"name": "In-product notifications",    "annot": "noise",    "archivable": True,  "smart": True,  "bulk": "archive"},
+    "8":  {"name": "In-product notifications",    "annot": "noise",    "archivable": True,  "smart": False, "bulk": "archive"},
     # Reading: per-row smart available for the occasional spam newsletter,
     # but the bulk button is "archive all" since most reading is "skim and
     # archive," not "unsubscribe."
-    "9":  {"name": "Reading",                     "annot": "reading",  "archivable": True,  "smart": True,  "bulk": "archive"},
+    "9":  {"name": "Reading",                     "annot": "reading",  "archivable": True,  "smart": False, "bulk": "archive"},
     "10": {"name": "Work FYI",                    "annot": "org",      "archivable": True,  "smart": False, "bulk": "archive"},
+    # School: class, professor, and advising mail that needs no reply
+    # (account.SCHOOL_DOMAINS). Archive-all, since it is read-and-clear.
+    "11": {"name": "School",                      "annot": "school",   "archivable": True,  "smart": False, "bulk": "archive"},
     "?":  {"name": "Ambiguous",                   "annot": "ambig",    "archivable": False, "smart": False, "bulk": None},
 }
 
@@ -214,6 +228,7 @@ body {
 .bucket--scan   { --accent-color: var(--accent); }
 .bucket--reading{ --accent-color: var(--accent); }
 .bucket--org    { --accent-color: var(--rule); }
+.bucket--school { --accent-color: var(--accent); }
 .bucket--noise  { --accent-color: var(--rule); }
 .bucket--fyi    { --accent-color: var(--rule); }
 .bucket__title { font-size: 14px; font-weight: 600; color: var(--ink); }
@@ -624,6 +639,50 @@ async function archiveThread(threadId, btn) {
     }
 }
 
+function describeEvent(ev) {
+    const d = new Date(ev.start);  // wall-clock time as written in the invite
+    const day = d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+    if (ev.all_day) return `${day} (all day)`;
+    const time = d.toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'});
+    return `${day}, ${time} ${ev.time_zone.split('/').pop().replace('_', ' ')} time (${ev.duration.replace('PT', '').toLowerCase()})`;
+}
+
+async function addToCalendar(threadId, bucket, btn) {
+    btn.disabled = true;
+    const prog = showProgress('Reading the invite…');
+    try {
+        const r = await fetch(PREFIX + '/api/calendar/extract', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({thread_id: threadId}),
+        });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        let s;
+        while (true) {
+            await new Promise((res) => setTimeout(res, 2000));
+            s = await (await fetch(PREFIX + '/api/calendar/extract-status?thread_id=' + encodeURIComponent(threadId))).json();
+            if (!s.in_progress) break;
+        }
+        prog.close();
+        if (s.no_event) { showToast('No event to add: ' + s.no_event); return; }
+        if (s.error) throw new Error(s.error);
+        const ev = s.result;
+        const ok = await confirmInPage(`Add "${ev.title}" on ${describeEvent(ev)} to your calendar?`);
+        if (!ok) return;
+        const added = await postJson('/api/calendar/add', {thread_id: threadId, bucket: bucket, event: ev});
+        showToast(`Added to your ${added.calendar} calendar.`, {
+            undo: async () => {
+                await postJson('/api/calendar/remove', {event_id: added.event_id});
+                showToast('Removed from your calendar');
+            },
+        });
+    } catch (e) {
+        prog.close();
+        showToast('Could not add to calendar: ' + e.message, {persist: true, error: true});
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function draftReply(threadId, btn) {
     btn.disabled = true;
     const prog = showProgress('Writing a reply…');
@@ -664,14 +723,58 @@ async function draftReply(threadId, btn) {
     }
 }
 
+function askUnsubscribe(msg, yesLabel) {
+    // Unsubscribing can't be undone, so the smart button asks first. Resolves
+    // 'unsubscribe', 'keep' (never unsubscribe this sender), or 'cancel'.
+    return new Promise(resolve => {
+        const region = document.getElementById('toast-region');
+        const t = document.createElement('div');
+        t.className = 'toast toast--progress toast--ask';
+        const label = document.createElement('span');
+        label.style.flex = '1';
+        label.textContent = msg;
+        t.appendChild(label);
+        const done = (v) => { if (region.contains(t)) region.removeChild(t); resolve(v); };
+        const yes = document.createElement('button');
+        yes.className = 'undo-btn'; yes.textContent = yesLabel || 'Unsubscribe';
+        yes.onclick = () => done('unsubscribe');
+        const keep = document.createElement('button');
+        keep.className = 'undo-btn'; keep.textContent = 'Keep me subscribed';
+        keep.title = 'Archive this one and never unsubscribe from this sender';
+        keep.onclick = () => done('keep');
+        const no = document.createElement('button');
+        no.className = 'close-btn'; no.textContent = '×'; no.title = 'Cancel';
+        no.onclick = () => done('cancel');
+        t.appendChild(yes); t.appendChild(keep); t.appendChild(no);
+        region.appendChild(t);
+    });
+}
+
+async function confirmSmart(threadId, bucket, r) {
+    // Turn a needs_confirm answer into the final action, per the user's choice.
+    // Returns the action result, or null if the user cancelled.
+    const choice = await askUnsubscribe(`Unsubscribe from ${r.sender_name}? This can't be undone.`);
+    if (choice === 'cancel') return null;
+    if (choice === 'keep') {
+        await postJson('/api/keep-subscribed', {sender_addr: r.sender_addr, sender_name: r.sender_name});
+    }
+    return await postJson('/api/smart-action', {
+        thread_id: threadId, bucket: bucket, confirm_unsubscribe: choice === 'unsubscribe',
+    });
+}
+
 async function smartActionThread(threadId, bucket, btn) {
     const row = btn.closest('.thread');
     row.classList.add('acting');
     btn.disabled = true;
     const prog = showProgress('Deciding…');
     try {
-        const r = await postJson('/api/smart-action', {thread_id: threadId, bucket: bucket});
+        let r = await postJson('/api/smart-action', {thread_id: threadId, bucket: bucket});
         prog.close();
+        if (r.action === 'needs_confirm') {
+            r = await confirmSmart(threadId, bucket, r);
+            if (!r) { row.classList.remove('acting'); btn.disabled = false; return; }
+        }
         finalizeRow(row, btn, 'acted');
         markRowResult(row, r.action);
         const label = ACTION_LABELS[r.action] || r.action;
@@ -853,6 +956,7 @@ async function bulkBucket(bucketId, smart, btn) {
     const total = rows.length;
     const counts = {unsubscribed: 0, muted: 0, spam: 0, archived: 0};
     let done = 0, fail = 0;
+    const pending = [];  // rows whose smart action would unsubscribe: asked about at the end
     const prog = showProgress(`Processing 0/${total}…`);
     for (const row of rows) {
         const threadId = row.dataset.threadId;
@@ -861,6 +965,11 @@ async function bulkBucket(bucketId, smart, btn) {
             const r = smart
                 ? await postJson('/api/smart-action', {thread_id: threadId, bucket: bucketId})
                 : await postJson('/api/archive', {thread_id: threadId});
+            if (r.action === 'needs_confirm') {
+                pending.push({row, threadId, r});
+                row.classList.remove('acting');
+                continue;
+            }
             const action = r.action || 'archived';
             counts[action] = (counts[action] || 0) + 1;
             row.classList.remove('acting');
@@ -877,6 +986,32 @@ async function bulkBucket(bucketId, smart, btn) {
         prog.update(`Processing ${done + fail}/${total}` + (tally ? ` — ${tally}` : ''));
     }
     prog.close();
+    if (pending.length) {
+        const names = [...new Set(pending.map((p) => p.r.sender_name))];
+        const shown = names.slice(0, 4).join(', ') + (names.length > 4 ? ` and ${names.length - 4} more` : '');
+        const choice = await askUnsubscribe(
+            `Unsubscribe from ${names.length} sender${names.length > 1 ? 's' : ''} (${shown})? This can't be undone.`,
+            'Unsubscribe all');
+        if (choice !== 'cancel') {
+            const p2 = showProgress(`Finishing ${pending.length}…`);
+            for (const p of pending) {
+                try {
+                    if (choice === 'keep') {
+                        await postJson('/api/keep-subscribed', {sender_addr: p.r.sender_addr, sender_name: p.r.sender_name});
+                    }
+                    const r = await postJson('/api/smart-action', {
+                        thread_id: p.threadId, bucket: bucketId, confirm_unsubscribe: choice === 'unsubscribe',
+                    });
+                    const action = r.action || 'archived';
+                    counts[action] = (counts[action] || 0) + 1;
+                    p.row.classList.add('acted');
+                    markRowResult(p.row, action);
+                    done++;
+                } catch (e) { fail++; }
+            }
+            p2.close();
+        }
+    }
     btn.disabled = false; btn.blur();
     const summary = Object.entries(counts).filter(([_, n]) => n > 0)
         .map(([k, n]) => `${n} ${k}`).join(', ') || 'nothing';
@@ -1561,7 +1696,7 @@ def apply_bucket_overrides(msgs: list[dict[str, Any]], overrides: dict[str, str]
 
 
 # Buckets offered in the per-row "move to" dropdown, in display order.
-_MOVE_TARGET_ORDER = ["1", "2", "4", "5", "6", "3", "9", "10", "7", "8"]
+_MOVE_TARGET_ORDER = ["1", "2", "4", "5", "6", "3", "11", "9", "10", "7", "8"]
 
 
 def _move_options_html(current_bucket_id: str) -> str:
@@ -1604,18 +1739,17 @@ def render_thread(
             f"onclick=\"draftReply('{thread_id}', this); event.stopPropagation();\" "
             f'title="Write a reply and save it to your Fastmail Drafts (never sent)">draft reply</button>'
         )
+    if bucket_id in CALENDAR_BUCKETS:
+        actions.append(
+            f'<button class="action action--cal" '
+            f"onclick=\"addToCalendar('{thread_id}', '{bucket_id}', this); event.stopPropagation();\" "
+            f'title="Read the event details from this email and add it to your Fastmail calendar (asks first)">add to calendar</button>'
+        )
     if bucket.get("smart"):
         actions.append(
             f'<button class="action action--smart" '
             f"onclick=\"smartActionThread('{thread_id}','{bucket_id}', this); event.stopPropagation();\" "
             f'title="Decide best action (unsub / mute / spam / archive)">smart</button>'
-        )
-    if bucket_id == "9":
-        # Reading bucket: save-for-later button. Persists to a JSONL file.
-        actions.append(
-            f'<button class="action action--save" '
-            f"onclick=\"saveThread('{thread_id}', this); event.stopPropagation();\" "
-            f'title="Save to read later — moves to Saved section">save</button>'
         )
     if bucket.get("archivable"):
         actions.append(
@@ -1831,6 +1965,7 @@ PAGE = """<!doctype html>
       <button class="nav-btn" onclick="refreshDigest(this)" title="Re-pull the latest 100 inbox messages and re-classify them">↻ Refresh</button>
       <button class="nav-btn" onclick="categorizeDigest(this)" title="Run the LLM-judge self-review pass over reply-needed and FYI threads, applying the SKILL.md categorization rules">⚖ Categorize</button>
       <button class="nav-btn" onclick="refreshAndCategorize(this)" title="Refresh + Categorize back-to-back; the inbox stays visible and the judge's moves animate into place">Refresh & Categorize</button>
+      <a href="{prefix}/reading-summary">Reading summary</a>
       <a href="{prefix}/settings">Settings & rules →</a>
     </nav>
   </header>
@@ -1876,13 +2011,15 @@ def _bucket_view(data: dict[str, Any]) -> dict[str, Any]:
         bucket = m.get("final_bucket", "?")
         by_bucket[bucket][tid].append(m)
 
-    order = ["1", "2", "4", "5", "6", "3", "10", "9", "7", "8", "?"]
+    order = ["1", "2", "4", "5", "6", "11", "3", "10", "9", "7", "8", "?"]
     # Starred section is at the very top. Mount div lets the JS refresh the
     # section after star/unstar without a full reload.
     parts = [f'<div id="starred-mount">{render_starred_section()}</div>']
     for b in order:
         parts.append(render_bucket(b, by_bucket.get(b, {})))
     bucket_html = "\n".join(parts)
+    # The save-for-later button was removed; the mount stays so anything saved
+    # before still shows (and renders nothing when the list is empty).
     bucket_html += f'<div id="saved-mount">{render_saved_section()}</div>'
 
     jump_parts = []
@@ -1898,7 +2035,7 @@ def _bucket_view(data: dict[str, Any]) -> dict[str, Any]:
             )
     jump = " ".join(jump_parts)
 
-    archive_buckets = {"7", "8", "9", "10"}
+    archive_buckets = {"7", "8", "9", "10", "11"}
     keep_count = sum(sum(len(v) for v in by_bucket.get(k, {}).values()) for k in by_bucket if k not in archive_buckets)
     archive_count = sum(sum(len(v) for v in by_bucket.get(k, {}).values()) for k in by_bucket if k in archive_buckets)
     total_threads = sum(len(by_bucket[b]) for b in by_bucket)
@@ -2041,6 +2178,68 @@ def api_draft_status(thread_id: str) -> JSONResponse:
     return JSONResponse(job)
 
 
+_calendar_jobs: dict[str, dict[str, Any]] = {}
+
+
+def _do_extract(thread_id: str) -> None:
+    job = _calendar_jobs[thread_id]
+    try:
+        job["result"] = calendar_events.extract_event(thread_id, DEFAULT_TZ)
+    except calendar_events.NoEventFound as e:
+        job["no_event"] = str(e)
+    except (RuntimeError, OSError, ValueError) as e:
+        job["error"] = str(e) or repr(e)
+    finally:
+        job["in_progress"] = False
+
+
+@app.post("/api/calendar/extract")
+async def api_calendar_extract(req: Request) -> JSONResponse:
+    """Read the event out of a thread (background; poll extract-status). Adds nothing."""
+    thread_id = (await req.json()).get("thread_id")
+    if not thread_id:
+        raise HTTPException(400, "thread_id required")
+    if _calendar_jobs.get(thread_id, {}).get("in_progress"):
+        return JSONResponse({"ok": True, "started": False})
+    _calendar_jobs[thread_id] = {"in_progress": True, "result": None, "error": None, "no_event": None}
+    threading.Thread(target=_do_extract, args=(thread_id,), daemon=True).start()
+    return JSONResponse({"ok": True, "started": True})
+
+
+@app.get("/api/calendar/extract-status")
+def api_calendar_extract_status(thread_id: str) -> JSONResponse:
+    job = _calendar_jobs.get(thread_id)
+    if job is None:
+        raise HTTPException(404, "no extraction for this thread")
+    return JSONResponse(job)
+
+
+@app.post("/api/calendar/add")
+async def api_calendar_add(req: Request) -> JSONResponse:
+    """Add the (user-confirmed) event to the calendar."""
+    body = await req.json()
+    event = body.get("event")
+    if not isinstance(event, dict):
+        raise HTTPException(400, "event required")
+    try:
+        added = calendar_events.add_event(event, prefer_school=body.get("bucket") == "11")
+    except calendar_events.BadEventDetails as e:
+        raise HTTPException(400, str(e)) from e
+    except fastmail.JmapError as e:
+        raise HTTPException(502, str(e)) from e
+    return JSONResponse({"ok": True, **added})
+
+
+@app.post("/api/calendar/remove")
+async def api_calendar_remove(req: Request) -> JSONResponse:
+    """Undo for calendar/add."""
+    event_id = (await req.json()).get("event_id")
+    if not event_id:
+        raise HTTPException(400, "event_id required")
+    calendar_events.remove_event(event_id)
+    return JSONResponse({"ok": True, "removed": event_id})
+
+
 @app.post("/api/delete-draft")
 async def api_delete_draft(req: Request) -> JSONResponse:
     """Undo for draft-reply: destroy the draft it created. Only ever touches
@@ -2075,7 +2274,20 @@ async def api_smart_action(req: Request) -> JSONResponse:
         snippet=msg.get("snippet", ""),
         sender=msg.get("from", ""),
         subject=msg.get("subject", ""),
+        confirm_unsubscribe=bool(body.get("confirm_unsubscribe")),
     ))
+
+
+@app.post("/api/keep-subscribed")
+async def api_keep_subscribed(req: Request) -> JSONResponse:
+    """Add a sender to the never-unsubscribe list (contacts.txt keep-subscribed)."""
+    body = await req.json()
+    addr = (body.get("sender_addr") or "").strip().lower()
+    try:
+        added = mail_actions.add_keep_subscribed(addr, body.get("sender_name") or "")
+    except mail_actions.NotAnEmailAddress as e:
+        raise HTTPException(400, str(e)) from e
+    return JSONResponse({"ok": True, "added": added, "sender_addr": addr})
 
 
 # Refresh runs ~60-80s end-to-end (propagate + classify + LLM judge), which
@@ -2511,6 +2723,165 @@ SETTINGS_PAGE = """<!doctype html>
 <script>{js}</script>
 </body></html>
 """
+
+
+READING_CSS = CSS + """
+.reading { max-width: 760px; }
+.reading h3 { font-size: 14px; margin: 20px 0 6px; }
+.reading p, .reading li { font-size: 13px; line-height: 1.55; }
+.reading a.src-ref { color: var(--ink-faint); text-decoration: none; font-size: 11px; }
+.reading a.src-ref:hover { text-decoration: underline; }
+.sources { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.sources h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+.sources li { font-size: 12px; margin: 3px 0; }
+.sources .tag { font-size: 10px; color: var(--ink-faint); margin-left: 6px; }
+.reading-actions { display: flex; gap: 10px; align-items: center; margin: 8px 0 16px; }
+"""
+
+READING_PAGE = """<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reading summary</title>
+<style>{css}</style>
+</head><body>
+<div class="shell">
+  <header class="masthead">
+    <div>
+      <span class="masthead__brand">Reading summary</span>
+      <span class="masthead__date">{subtitle}</span>
+    </div>
+    <nav class="masthead__nav">
+      <a href="{prefix}/">← Back to digest</a>
+    </nav>
+  </header>
+  <div class="reading-actions">
+    <button class="nav-btn" id="summarize-now" onclick="summarizeNow(this)" title="Summarize the Reading group's last 7 days now (does not archive anything)">Summarize now</button>
+    {undo}
+    <span id="reading-status" class="summary"></span>
+  </div>
+  <div class="reading">{body}</div>
+</div>
+<script>
+const PREFIX = {prefix_json};
+async function summarizeNow(btn) {{
+  btn.disabled = true;
+  const status = document.getElementById('reading-status');
+  status.textContent = 'Reading this week\u2019s newsletters\u2026';
+  try {{
+    const r = await fetch(PREFIX + '/api/reading-summary', {{method: 'POST'}});
+    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+    while (true) {{
+      await new Promise((res) => setTimeout(res, 3000));
+      const s = await (await fetch(PREFIX + '/api/reading-summary-status')).json();
+      if (s.in_progress) continue;
+      if (s.error) throw new Error(s.error);
+      location.reload();
+      return;
+    }}
+  }} catch (e) {{
+    status.textContent = 'Could not summarize: ' + e.message;
+    btn.disabled = false;
+  }}
+}}
+async function undoArchive(btn, name) {{
+  btn.disabled = true;
+  const r = await fetch(PREFIX + '/api/reading-summary/undo-archive', {{
+    method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{name}}),
+  }});
+  const d = await r.json();
+  document.getElementById('reading-status').textContent =
+    r.ok ? `Moved ${{d.restored}} newsletter${{d.restored === 1 ? '' : 's'}} back to your inbox.` : ('Failed: ' + (d.detail || r.status));
+  if (r.ok) btn.remove(); else btn.disabled = false;
+}}
+</script>
+</body></html>
+"""
+
+
+def render_reading_summary(name: str | None, record: dict[str, Any] | None) -> str:
+    """The reading-summary page for one saved record (or an empty state)."""
+    if record is None:
+        body = '<p class="summary">No summary yet. One is written every Sunday morning, or press "Summarize now".</p>'
+        return READING_PAGE.format(
+            css=READING_CSS, prefix=ROOT_PATH, prefix_json=json.dumps(ROOT_PATH),
+            subtitle="weekly", undo="", body=body,
+        )
+    rendered = nh3.clean(markdown.markdown(record.get("summary_md", "")))
+    # [3] / [2, 7] -> links down to the numbered source list.
+    rendered = re.sub(
+        r"\[(\d+(?:\s*,\s*\d+)*)\]",
+        lambda m: " ".join(
+            f'<a class="src-ref" href="#src-{n.strip()}">[{n.strip()}]</a>' for n in m.group(1).split(",")
+        ),
+        rendered,
+    )
+    items = []
+    for src in record.get("sources", []):
+        tag = "opened" if src.get("opened") else "unopened"
+        items.append(
+            f'<li id="src-{src["n"]}">[{src["n"]}] <a href="{html.escape(src["url"])}" target="_blank" rel="noopener">'
+            f'{html.escape(src["subject"])}</a> — {html.escape(src["from"])}'
+            f'<span class="tag">{html.escape(src["received_at"][:10])} · {tag}</span></li>'
+        )
+    body = rendered + f'<div class="sources"><h4>Sources</h4><ol style="list-style:none;padding:0">{"".join(items)}</ol></div>'
+    archived = record.get("archived_thread_ids", [])
+    undo = ""
+    if archived and not record.get("archive_undone"):
+        undo = (
+            f'<button class="nav-btn" onclick="undoArchive(this, {html.escape(json.dumps(name))})" '
+            f'title="Move the newsletters this summary archived back to your inbox">'
+            f"Undo: put {len(archived)} unopened back in inbox</button>"
+        )
+    created = record.get("created_at", "")[:10]
+    return READING_PAGE.format(
+        css=READING_CSS, prefix=ROOT_PATH, prefix_json=json.dumps(ROOT_PATH),
+        subtitle=f"{record.get('days', 7)} days to {created}", undo=undo, body=body,
+    )
+
+
+@app.get("/reading-summary", response_class=HTMLResponse)
+def reading_summary_page() -> HTMLResponse:
+    found = reading_summary.latest()
+    name, record = found if found else (None, None)
+    return HTMLResponse(render_reading_summary(name, record))
+
+
+_reading_job: dict[str, Any] = {"in_progress": False, "error": None}
+
+
+def _do_reading_summary() -> None:
+    try:
+        reading_summary.run(days=7, archive_unopened=False)
+        _reading_job["error"] = None
+    except (RuntimeError, OSError, ValueError) as e:
+        _reading_job["error"] = str(e) or repr(e)
+    finally:
+        _reading_job["in_progress"] = False
+
+
+@app.post("/api/reading-summary")
+def api_reading_summary() -> JSONResponse:
+    """Summarize now, in the background (no archiving; the weekly run does that)."""
+    if _reading_job["in_progress"]:
+        return JSONResponse({"ok": True, "started": False})
+    _reading_job.update({"in_progress": True, "error": None})
+    threading.Thread(target=_do_reading_summary, daemon=True).start()
+    return JSONResponse({"ok": True, "started": True})
+
+
+@app.get("/api/reading-summary-status")
+def api_reading_summary_status() -> JSONResponse:
+    return JSONResponse(_reading_job)
+
+
+@app.post("/api/reading-summary/undo-archive")
+async def api_reading_undo_archive(req: Request) -> JSONResponse:
+    body = await req.json()
+    name = body.get("name") or ""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.json", name):
+        raise HTTPException(400, "unknown summary")
+    if not (reading_summary.SUMMARY_DIR / name).exists():
+        raise HTTPException(404, "no such summary")
+    return JSONResponse({"ok": True, "restored": reading_summary.undo_archive(name)})
 
 
 @app.get("/settings", response_class=HTMLResponse)

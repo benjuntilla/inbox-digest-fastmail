@@ -8,9 +8,9 @@ format = "v2"
 [template]
 slug = "inbox-digest-fastmail"
 title = "Inbox Digest for Fastmail"
-description = "A Fastmail inbox digest and one-click triage app: sorts your inbox into ten groups, lets you archive / mute / spam / unsubscribe in one click, drafts replies into Fastmail Drafts, learns from your corrections, and can run every morning with a heads-up."
+description = "A Fastmail inbox digest and triage app: sorts your inbox into eleven groups (including School), archives a thread or a whole group with one button, writes AI reply drafts into Fastmail Drafts, adds event invites to your calendar, writes a weekly summary of your newsletters, learns from your corrections, and can run every morning with a heads-up."
 thumbnail = "template.svg"
-version = "v1"
+version = "v2"
 
 # How this template is DERIVED from the workspace it came from. An
 # update re-runs this recipe rather than diffing two repos, which is what
@@ -30,6 +30,7 @@ modification_rules = [
     "ship only example rows in contacts.txt",
     "replace the publisher's own newsletter subscriptions with example entries",
     "use a neutral example domain in docs",
+    "ship SCHOOL_DOMAINS empty (adopters set their own school)",
 ]
 
 # Everything an adopter must deal with before this is really theirs.
@@ -64,9 +65,14 @@ scope = "fastmail-api"
 permission = "fastmail-write-mail"
 note = "archive, mute (creates a Muted mailbox on first use), mark as spam, and saving reply drafts to Drafts; never sends mail"
 
+[[requirements.permission]]
+scope = "fastmail-api"
+permission = "fastmail-write-calendars"
+note = "the add-to-calendar button: adds an event the user confirmed to their Fastmail calendar, and deletes it again on undo"
+
 [requirements.llm]
 method = "keyless"
-note = "claude -p through the bundled email_review/claude_p.py, for the AI review pass (llm_judge.py) and reply drafts (drafts.py); an adopter on the keyed litellm path should switch these calls per the use-ai-integration skill"
+note = "claude -p through the bundled email_review/claude_p.py, for the AI review pass (llm_judge.py), reply drafts (drafts.py), reading an event out of an email for add-to-calendar (calendar_events.py), and the weekly reading summary (reading_summary.py); an adopter on the keyed litellm path should switch these calls per the use-ai-integration skill"
 
 [[requirements.adaptation]]
 summary = "account.py ships a placeholder identity (name, sending addresses, org domain, AP forwarder)"
@@ -77,7 +83,7 @@ summary = "contacts.txt ships with example rows only"
 resolution = "run scripts/import_fastmail_contacts.py --write to fill the managed block from the adopter's Fastmail address book, then add hand-written rows (keep-subscribed newsletters, vendors, a bare school/employer domain)"
 
 [[requirements.adaptation]]
-summary = "the ten-group taxonomy in RULES.md is one publisher's way of triaging"
+summary = "the eleven-group taxonomy in RULES.md is one publisher's way of triaging"
 resolution = "walk the adopter through the groups and rename, merge or retune them in RULES.md (and the group table in runner.py / sender lists in classify.py)"
 
 [[requirements.adaptation]]
@@ -91,6 +97,14 @@ resolution = "if wanted, add a cron entry through system/libs/automations/run_jo
 [[requirements.adaptation]]
 summary = "email-only (mailto) unsubscribes are deliberately not sent"
 resolution = "confirm the adopter accepts that; acting on them would mean sending mail from their account"
+
+[[requirements.adaptation]]
+summary = "account.py ships SCHOOL_DOMAINS empty, so the School group is off"
+resolution = "if the adopter is a student, set SCHOOL_DOMAINS to their school's domains (e.g. (\"university.example\",)); otherwise leave it empty"
+
+[[requirements.adaptation]]
+summary = "the weekly reading summary (Sundays 8 AM) and the weekly contacts refresh (Sundays 6 AM) are not scheduled"
+resolution = "if wanted, add cron entries through system/libs/automations/run_job.sh like the morning run's: .agents/skills/email-digest/scripts/reading_summary.py (summarizes the Reading group's week and archives newsletters never opened; undo on the summary page) and import_fastmail_contacts.py --write, as documented in the skill's SKILL.md 'Weekly reading summary' and 'Import the Fastmail address book'"
 
 # What the included code needs INSTALLED. apt takes bare names: versions
 # are a function of the apt snapshot timestamp, so replaying names at the

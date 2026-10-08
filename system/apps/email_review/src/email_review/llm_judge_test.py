@@ -31,7 +31,7 @@ def test_parses_moves_to_any_bucket_and_keeps(mod):
         "[0] MOVE_TO_8 — automated credit alert\n"
         "[1] KEEP — real ask\n"
         "[2] MOVE_TO_9 — newsletter\n"
-        "[3] MOVE_TO_11 — nonsense\n"
+        "[3] MOVE_TO_12 — nonsense\n"
         "noise line\n"
     )
     verdicts = mod.parse_batch_verdicts(out, [0, 1, 2, 3])

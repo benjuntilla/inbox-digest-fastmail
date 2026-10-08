@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from email_review.claude_p import claude_p_completion
+from email_review.school import apply_school_group
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DATA_PATH = REPO_ROOT / "data/.apps/email-review/data.json"
@@ -42,7 +43,7 @@ RULES_PATH = REPO_ROOT / ".agents/skills/email-digest/RULES.md"
 # most often get wrong, and where a mistake costs the user most (a missed reply,
 # or a real person filed as a stranger).
 JUDGED_BUCKETS = {"1", "3", "6"}
-ALLOWED_BUCKETS = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+ALLOWED_BUCKETS = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}
 
 BATCH_PROMPT_HEADER = """\
 You are reviewing email bucket assignments. Buckets:
@@ -59,6 +60,8 @@ You are reviewing email bucket assignments. Buckets:
   9 = Reading (newsletters and publications the user subscribed to)
   10 = Work FYI (automated AP / vendor / process mail — bill-pay, invoices,
        reimbursements addressed to your AP forwarder)
+  11 = School (course, professor, advising, and campus mail that needs no
+       reply or decision from the user)
 
 === Classification rules (canonical) ===
 {rules}
@@ -73,7 +76,7 @@ or trailing commentary. Each line is one of:
   [<thread_index>] KEEP — <short reason>
   [<thread_index>] MOVE_TO_<n> — <short reason>
 
-where <n> is one of 1-10 and <thread_index> matches the bracketed
+where <n> is one of 1-11 and <thread_index> matches the bracketed
 number in the input. KEEP when the current bucket is right. MOVE_TO only
 when the rules clearly indicate a different bucket. Conservative default:
 KEEP if unsure (false retentions are cheap; false demotions hide things
@@ -266,6 +269,10 @@ def main() -> int:
                 "reason": reason,
             }
         )
+
+    # The judge may have moved a school thread into FYI / reading / notifications;
+    # keep the School group rule the classifier applies.
+    apply_school_group(candidates)
 
     data.setdefault("stats", {})["llm_judge_moves"] = moves
     data["stats"]["llm_judge_log"] = judge_log
